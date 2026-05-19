@@ -165,7 +165,7 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
     setLoading(true)
     apiFetch(`/api/lavori?dal=${formatDate(lunedi)}&al=${formatDate(sabato)}`)
       .then(r => r.json())
-      .then(data => { setLavori(data); setLoading(false) })
+      .then(data => { setLavori(Array.isArray(data) ? data : []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [offsetSettimana, refreshKey])
 
