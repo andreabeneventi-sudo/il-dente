@@ -672,6 +672,33 @@ export default function Impostazioni() {
           </div>
         </div>
 
+      {/* Bottone Salva fisso in basso */}
+      <div style={{
+        position:'fixed', bottom:0, left:0, right:0,
+        background:'var(--sur)', borderTop:'1px solid var(--bor)',
+        padding:'14px 24px', display:'flex', justifyContent:'flex-end',
+        alignItems:'center', gap:'12px', zIndex:100,
+      }}>
+        {saved && (
+          <span style={{ fontSize:'12px', color:'var(--accent)', fontWeight:600 }}>
+            ✓ Salvato
+          </span>
+        )}
+        <button
+          onClick={salva}
+          disabled={saving}
+          style={{
+            padding:'9px 28px', border:'none', background:'var(--accent)',
+            color:'#fff', borderRadius:'9px', fontSize:'13px', fontWeight:700,
+            cursor: saving ? 'not-allowed' : 'pointer',
+            fontFamily:'Instrument Sans, sans-serif',
+            opacity: saving ? .6 : 1,
+          }}
+        >
+          {saving ? 'Salvataggio...' : 'Salva impostazioni'}
+        </button>
+      </div>
+
       </div>
     </div>
   )
