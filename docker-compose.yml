@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ildente-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ildente
+      POSTGRES_USER: ildente_user
+      POSTGRES_PASSWORD: ildente_pass
+      TZ: Europe/Rome
+    ports:
+      - "5432:5432"
+    volumes:
+      - ildente_data:/var/lib/postgresql/data
+
+volumes:
+  ildente_data:
+    external: true
+    name: d97ba13b07cf21b902737f58d36923b8c9df96ff1e4934078afcdace416b3604
