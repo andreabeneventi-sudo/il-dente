@@ -1,4 +1,4 @@
-const BASE = 'http://localhost:3001'
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 // Patch globale: aggiunge automaticamente Authorization a tutte le chiamate verso il backend
 const _originalFetch = window.fetch.bind(window)
