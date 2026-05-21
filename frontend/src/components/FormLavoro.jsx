@@ -413,7 +413,7 @@ const [lavoroCorrente, setLavoroCorrente] = useState(lavoro)
 
       onSaved()
       setSalvato(true)
-      setTimeout(() => setSalvato(false), isMobile ? 8000 : 3000)
+      setTimeout(() => setSalvato(false), 3000)
     } catch {
       setErrore('Errore durante il salvataggio. Riprova.')
     }
@@ -880,49 +880,40 @@ const salvaRef = useRef(null)
             </div>
           )}
 
-          {/* Tasto PDF su mobile (appare dopo il primo salvataggio) */}
+          {/* Su mobile: tasto PDF fisso sopra il FAB, visibile subito dopo il salvataggio */}
           {mostraPDF && isMobile && (
             <button onClick={stampaPDF} disabled={stampando} style={{
-              padding:'7px 14px', border:'1px solid var(--bor)', background:'var(--sur2)',
-              borderRadius:'8px', fontSize:'11px', fontWeight:600, cursor:'pointer',
-              fontFamily:'Instrument Sans, sans-serif', color:'var(--tx2)',
+              position:'fixed',
+              bottom:'calc(56px + 16px + 52px + 12px + env(safe-area-inset-bottom))',
+              right:'20px', zIndex:298,
+              padding:'12px 20px',
+              border:'none', background:'var(--sur)', color:'var(--accent)',
+              borderRadius:'12px', fontSize:'13px', fontWeight:700,
+              cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
+              boxShadow:'0 2px 12px rgba(2,132,199,.25)',
+              border:'2px solid var(--accent)',
               opacity: stampando ? .6 : 1,
+              display:'flex', alignItems:'center', gap:'8px',
             }}>
-              {stampando ? '...' : '📄 PDF'}
+              {stampando ? '...' : '📄 Apri PDF'}
             </button>
           )}
 
           {/* Toast notifica salvataggio */}
           <div style={{
             position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)',
-            zIndex:999,
-            pointerEvents: salvato ? 'auto' : 'none',
+            zIndex:999, pointerEvents:'none',
             opacity: salvato ? 1 : 0,
             transition: 'opacity 0.7s ease',
           }}>
             <div style={{
-              display:'flex', alignItems:'center', gap:'10px',
+              display:'flex', alignItems:'center', gap:'8px',
               background:'#15803d', color:'#fff',
-              borderRadius:'10px', padding:'10px 18px',
+              borderRadius:'10px', padding:'10px 22px',
               fontSize:'13px', fontWeight:700,
               boxShadow:'0 4px 20px rgba(15,23,42,.18)',
             }}>
               ✅ Salvato
-              {mostraPDF && isMobile && (
-                <button
-                  onClick={stampaPDF}
-                  disabled={stampando}
-                  style={{
-                    padding:'5px 14px', border:'none',
-                    background:'rgba(255,255,255,.25)', color:'#fff',
-                    borderRadius:'7px', fontSize:'12px', fontWeight:700,
-                    cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
-                    opacity: stampando ? .6 : 1,
-                  }}
-                >
-                  {stampando ? '...' : '📄 PDF'}
-                </button>
-              )}
             </div>
           </div>
 

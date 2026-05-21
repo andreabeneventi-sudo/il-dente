@@ -415,13 +415,14 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
       {/* Header */}
       <div style={{ padding: isMobile ? '10px 16px' : '12px 24px', borderBottom:'1px solid var(--bor)', background:'var(--sur)', display:'flex', flexDirection:'column', gap:'8px', flexShrink:0 }}>
 
-        {/* Riga 1: Torna · Titolo · PDF · Salva */}
+        {/* Riga 1: Torna | Titolo/codice | PDF | Salva */}
         <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+
           <button onClick={onTorna} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px 12px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', color:'var(--tx2)', flexShrink:0 }}>
             ← Torna
           </button>
 
-          <div style={{ display:'flex', flexDirection:'column', flex:1, minWidth:0 }}>
+          <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize: isMobile ? '13px' : '15px', fontWeight:700, color:'var(--tx)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {clienteNome} — {lavoro.paziente}
             </div>
@@ -430,21 +431,21 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
             </div>
           </div>
 
-          {/* Toast */}
-          <div style={{ opacity: salvato ? 1 : 0, transition:'opacity .7s', background:'#15803d', color:'#fff', borderRadius:'8px', padding:'6px 10px', fontSize:'11px', fontWeight:700, pointerEvents:'none', flexShrink:0, whiteSpace:'nowrap' }}>
+          {/* Toast salvato */}
+          <div style={{ opacity:salvato?1:0, transition:'opacity .7s', background:'#15803d', color:'#fff', borderRadius:'8px', padding:'5px 10px', fontSize:'11px', fontWeight:700, pointerEvents:'none', flexShrink:0, whiteSpace:'nowrap' }}>
             ✅ Salvato
           </div>
 
-          {/* PDF — sempre visibile se non è evento */}
+          {/* PDF — sempre visibile */}
           {lavoro.tipo_record !== 'evento' && (
-            <button onClick={apriPDF} disabled={stampando} style={{ padding: isMobile ? '7px 12px' : '8px 14px', border:'1px solid var(--bor)', background:'var(--sur2)', color:'var(--tx2)', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', opacity: stampando ? .6 : 1, flexShrink:0 }}>
+            <button onClick={apriPDF} disabled={stampando} style={{ padding:'7px 14px', border:'1px solid var(--bor)', background:'var(--sur2)', color:'var(--tx2)', borderRadius:'8px', fontSize:'12px', fontWeight:700, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', flexShrink:0, opacity:stampando?.6:1 }}>
               {stampando ? '...' : '📄 PDF'}
             </button>
           )}
 
-          {/* Salva — su mobile icona, su desktop testo */}
-          <button onClick={salva} disabled={saving || !hasChanges} style={{ padding: isMobile ? '7px 12px' : '8px 20px', border:'none', background:'var(--accent)', color:'#fff', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor: hasChanges ? 'pointer' : 'not-allowed', fontFamily:'Instrument Sans, sans-serif', boxShadow:'0 2px 8px rgba(2,132,199,.3)', opacity: saving || !hasChanges ? .4 : 1, flexShrink:0 }}>
-            {saving ? '...' : isMobile ? '✓' : 'Salva'}
+          {/* Salva */}
+          <button onClick={salva} disabled={saving||!hasChanges} style={{ padding:'7px 16px', border:'none', background:'var(--accent)', color:'#fff', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:hasChanges?'pointer':'not-allowed', fontFamily:'Instrument Sans, sans-serif', boxShadow:'0 2px 8px rgba(2,132,199,.3)', opacity:saving||!hasChanges?.4:1, flexShrink:0 }}>
+            {saving ? '...' : 'Salva'}
           </button>
         </div>
 
@@ -456,10 +457,8 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
               return (
                 <div key={s.id} onClick={() => set('stato_id', String(s.id))} style={{
                   padding:'4px 12px', borderRadius:'20px', fontSize:'11px', fontWeight:700,
-                  cursor:'pointer', border:`2px solid ${isSelected ? s.colore : 'var(--bor)'}`,
-                  background: isSelected ? s.colore + '22' : 'var(--sur2)',
-                  color: isSelected ? s.colore : 'var(--tx3)',
-                  transition:'all .15s',
+                  cursor:'pointer', border:`2px solid ${isSelected?s.colore:'var(--bor)'}`,
+                  background:isSelected?s.colore+'22':'var(--sur2)', color:isSelected?s.colore:'var(--tx3)', transition:'all .15s',
                 }}>{s.nome}</div>
               )
             })}

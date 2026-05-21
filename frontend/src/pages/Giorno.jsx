@@ -46,8 +46,9 @@ function getColoreEvento(ev, statiDB, staffDB) {
     const s = statiDB.find(s => s.id === ev.stato_id)
     if (s?.colore) return { bg: s.colore+'22', border: s.colore }
   }
-  const fallback = { sky:'#0284C7',red:'#ef4444',green:'#16a34a',amber:'#ca8a04',purple:'#9333ea',blue:'#3b82f6',slate:'#64748b',fuchsia:'#d946ef' }
-  return { bg: (fallback[ev.colore]||'#0284C7')+'22', border: fallback[ev.colore]||'#0284C7' }
+  const fb = { sky:'#0284C7',red:'#ef4444',green:'#16a34a',amber:'#ca8a04',purple:'#9333ea',blue:'#3b82f6',slate:'#64748b',fuchsia:'#d946ef' }
+  const hex = fb[ev.colore] || '#0284C7'
+  return { bg: hex+'22', border: hex }
 }
 function calcolaLayout(lavori) {
   const events = lavori.map(ev => {
@@ -69,7 +70,7 @@ function calcolaLayout(lavori) {
     }
   return events
 }
-function pad2(n) { return String(n).padStart(2,'0') }
+function p2(n) { return String(n).padStart(2,'0') }
 
 export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0, onEventoClick, onNuovoPrecompilato }) {
   const oggi   = new Date()
@@ -78,14 +79,11 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
 
   const oggiIdx = giorni.findIndex(d => d.toDateString() === oggi.toDateString())
   const [dIdx, setDIdx] = useState(oggiIdx >= 0 ? oggiIdx : 0)
-
   const [lavori,  setLavori]  = useState([])
   const [loading, setLoading] = useState(true)
   const [statiDB, setStatiDB] = useState([])
   const [staffDB, setStaffDB] = useState([])
-
-  // Ghost hover — nuovo slot
-  const [ghost, setGhost] = useState(null)  // { top, ora, oraFine }
+  const [ghost,   setGhost]   = useState(null)
 
   const bodyRef = useRef(null)
 
@@ -98,14 +96,12 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
     setLoading(true)
     const sabato = new Date(lunedi); sabato.setDate(lunedi.getDate()+6)
     apiFetch(`/api/lavori?dal=${formatDate(lunedi)}&al=${formatDate(sabato)}`)
-      .then(r=>r.json())
-      .then(data => { setLavori(data); setLoading(false) })
+      .then(r=>r.json()).then(data => { setLavori(data); setLoading(false) })
       .catch(()=>setLoading(false))
   }, [offsetSettimana, refreshKey])
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 120 }, [])
 
-  // Quando cambia settimana torna al giorno corrente se esiste, altrimenti lunedì
   useEffect(() => {
     const ng  = getSettimana(getLunedi(offsetSettimana))
     const idx = ng.findIndex(d => d.toDateString() === oggi.toDateString())
@@ -116,26 +112,25 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
   const isOggi    = giorno.toDateString() === oggi.toDateString()
   const nowTop    = getNowTop()
   const giornoStr = formatDate(giorno)
-
   const lavoriGiorno = lavori.filter(ev => ev.data_inizio?.slice(0,10) === giornoStr)
   const layout       = calcolaLayout(lavoriGiorno)
 
-  // ── Ghost hover ───────────────────────────────────────────────────────────────
+  // Ghost: usa e.currentTarget (la colonna eventi) per rect — così relY è 0 all'inizio della griglia ore
   function onColMouseMove(e) {
     if (e.target.closest('[data-evento]')) { setGhost(null); return }
-    // rect relativo alla colonna eventi stessa (e.currentTarget)
     const rect   = e.currentTarget.getBoundingClientRect()
     const relY   = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
+    // relY è in pixel dalla cima della colonna eventi (ore 06:00 = 0px)
+    // snap a 30 minuti (30px)
     const snapPx = Math.floor(relY / 30) * 30
-    const mins   = Math.max(0, snapPx)
-    const h  = ORA_INIZIO + Math.floor(mins/60)
-    const m  = mins % 60
-    const eh = ORA_INIZIO + Math.floor((mins+30)/60)
-    const em = (mins+30) % 60
-    setGhost({ top: snapPx, ora:`${pad2(h)}:${pad2(m)}`, oraFine:`${pad2(eh)}:${pad2(em)}` })
+    const mins   = Math.max(0, snapPx)   // minuti da ORA_INIZIO
+    const h      = ORA_INIZIO + Math.floor(mins / 60)
+    const m      = mins % 60
+    const eh     = ORA_INIZIO + Math.floor((mins + 30) / 60)
+    const em     = (mins + 30) % 60
+    setGhost({ top: snapPx, ora:`${p2(h)}:${p2(m)}`, oraFine:`${p2(eh)}:${p2(em)}` })
   }
 
-  // ── Click su slot vuoto ───────────────────────────────────────────────────────
   function onColClick(e) {
     if (e.target.closest('[data-evento]')) return
     if (!onNuovoPrecompilato || !ghost) return
@@ -153,14 +148,12 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
         <div style={{ display:'flex', flex:1 }}>
           <div style={{ width:'44px', flexShrink:0 }} />
           {giorni.map((d,i) => {
-            const isT   = d.toDateString() === oggi.toDateString()
-            const isSel = i === dIdx
+            const isT=d.toDateString()===oggi.toDateString(), isSel=i===dIdx
             return (
-              <div key={i} onClick={() => setDIdx(i)} style={{ flex:1, padding:'8px 4px', textAlign:'center', cursor:'pointer', borderBottom: isSel ? '2px solid var(--accent)' : '2px solid transparent', marginBottom:'-1px' }}>
-                <div style={{ fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color: isSel ? 'var(--accent)' : 'var(--tx3)', marginBottom:'3px' }}>{GIORNI_BREVI[i]}</div>
-                <div style={{ fontSize: isT?'13px':'18px', fontWeight: isT?700:300, lineHeight:1,
-                  color: isT?'#fff': isSel?'var(--accent)':'var(--tx2)',
-                  ...(isT ? { background:'var(--accent)', width:'28px', height:'28px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' } : {}) }}>
+              <div key={i} onClick={()=>setDIdx(i)} style={{ flex:1, padding:'8px 4px', textAlign:'center', cursor:'pointer', borderBottom:isSel?'2px solid var(--accent)':'2px solid transparent', marginBottom:'-1px' }}>
+                <div style={{ fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:isSel?'var(--accent)':'var(--tx3)', marginBottom:'3px' }}>{GIORNI_BREVI[i]}</div>
+                <div style={{ fontSize:isT?'13px':'18px', fontWeight:isT?700:300, lineHeight:1, color:isT?'#fff':isSel?'var(--accent)':'var(--tx2)',
+                  ...(isT?{background:'var(--accent)',width:'28px',height:'28px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}:{}) }}>
                   {d.getDate()}
                 </div>
               </div>
@@ -179,7 +172,7 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
           {lavoriGiorno.length} {lavoriGiorno.length===1?'lavoro':'lavori'}
         </span>
         {onNuovoPrecompilato && (
-          <button onClick={() => onNuovoPrecompilato({ data: giornoStr, tipo_form:'lavoro' })}
+          <button onClick={() => onNuovoPrecompilato({ data:giornoStr, tipo_form:'lavoro' })}
             style={{ marginLeft:'auto', padding:'5px 12px', border:'none', background:'var(--accent)', color:'#fff', borderRadius:'8px', fontSize:'11px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif' }}>
             + Aggiungi lavoro
           </button>
@@ -188,17 +181,15 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
 
       {/* Corpo */}
       <div ref={bodyRef} style={{ flex:1, overflowY:'auto', position:'relative' }}>
-        {loading && (
-          <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', color:'var(--tx3)', fontSize:'13px' }}>Caricamento...</div>
-        )}
+        {loading && <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', color:'var(--tx3)', fontSize:'13px' }}>Caricamento...</div>}
+
         <div style={{ display:'grid', gridTemplateColumns:'44px 1fr', position:'relative' }}>
 
-          {/* Linea ora corrente */}
           {isOggi && (
             <div style={{ position:'absolute', left:0, right:0, top:`${nowTop}px`, height:'2px', background:'rgba(239,68,68,.55)', zIndex:15, pointerEvents:'none' }}>
               <div style={{ position:'absolute', left:'44px', top:'-4px', width:'8px', height:'8px', background:'var(--red)', borderRadius:'50%' }} />
               <span style={{ position:'absolute', left:'2px', top:'-8px', fontSize:'9px', fontFamily:'JetBrains Mono, monospace', background:'var(--red)', color:'#fff', padding:'1px 4px', borderRadius:'3px' }}>
-                {pad2(new Date().getHours())}:{pad2(new Date().getMinutes())}
+                {p2(new Date().getHours())}:{p2(new Date().getMinutes())}
               </span>
             </div>
           )}
@@ -217,7 +208,7 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
             onMouseMove={onColMouseMove}
             onMouseLeave={() => setGhost(null)}
             onClick={onColClick}
-            style={{ borderLeft:'1px solid var(--borl)', position:'relative', background: isOggi ? 'rgba(2,132,199,.015)' : 'transparent', cursor: onNuovoPrecompilato ? 'pointer' : 'default' }}
+            style={{ borderLeft:'1px solid var(--borl)', position:'relative', background:isOggi?'rgba(2,132,199,.015)':'transparent', cursor:onNuovoPrecompilato?'pointer':'default' }}
           >
             {ORE.map(ora => (
               <div key={ora} style={{ height:`${SLOT_H}px`, borderBottom:'1px solid var(--borl)', position:'relative' }}>
@@ -225,7 +216,6 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
               </div>
             ))}
 
-            {/* Ghost hover — nuovo slot */}
             {ghost && (
               <div style={{ position:'absolute', top:`${ghost.top}px`, left:'3px', right:'3px', height:'30px',
                 background:'rgba(217,70,239,.12)', border:'1.5px dashed rgba(217,70,239,.45)',
@@ -235,27 +225,21 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
               </div>
             )}
 
-            {/* Eventi */}
             {layout.map(({ ev, top, h, col, totCols }) => {
               const c = getColoreEvento(ev, statiDB, staffDB)
               const inizio = parseData(ev.data_inizio)
-              const oraLabel = `${pad2(inizio.getHours())}:${pad2(inizio.getMinutes())}`
-              const widthPct = 100/totCols, leftPct = col*widthPct
+              const oraLabel = `${p2(inizio.getHours())}:${p2(inizio.getMinutes())}`
+              const widthPct=100/totCols, leftPct=col*widthPct
               const clienteLabel = ev.cliente_display || ev.clinica
-              const rigaInfo = [clienteLabel, ev.paziente, ev.tipo ? `${ev.tipo}${ev.tinta?` ${ev.tinta}`:''}` : null, ev.elementi||null].filter(Boolean).join(' — ')
-
+              const rigaInfo = [clienteLabel, ev.paziente, ev.tipo?`${ev.tipo}${ev.tinta?` ${ev.tinta}`:''}`:null, ev.elementi||null].filter(Boolean).join(' — ')
               return (
                 <div key={ev.id} data-evento="true"
                   onClick={e => { e.stopPropagation(); onEventoClick(ev) }}
-                  style={{
-                    position:'absolute', top:`${top}px`, height:`${h}px`,
+                  style={{ position:'absolute', top:`${top}px`, height:`${h}px`,
                     left:`calc(${leftPct}% + 4px)`, width:`calc(${widthPct}% - 8px)`,
-                    background: c.border, borderLeft:`4px solid ${c.bg}`,
-                    color: testoAdattivo(c.border), borderRadius:'7px', padding:'4px 8px',
-                    cursor:'pointer', overflow:'hidden', zIndex:10+col,
-                    boxShadow:'0 1px 4px rgba(15,23,42,.07)',
-                    display:'flex', alignItems:'center', gap:'6px',
-                  }}>
+                    background:c.border, borderLeft:`4px solid ${c.bg}`, color:testoAdattivo(c.border),
+                    borderRadius:'7px', padding:'4px 8px', cursor:'pointer', overflow:'hidden', zIndex:10+col,
+                    boxShadow:'0 1px 4px rgba(15,23,42,.07)', display:'flex', alignItems:'center', gap:'6px' }}>
                   <span style={{ fontFamily:'JetBrains Mono, monospace', fontSize:'10px', fontWeight:700, opacity:.8, flexShrink:0 }}>{oraLabel}</span>
                   <span style={{ fontSize:'12px', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{rigaInfo}</span>
                   {ev.urgente && <span style={{ fontSize:'9px', background:'var(--red)', color:'#fff', padding:'1px 5px', borderRadius:'3px', fontWeight:700, flexShrink:0 }}>⚡</span>}
