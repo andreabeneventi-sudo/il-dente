@@ -1,17 +1,17 @@
 import { apiFetch } from '../utils/apiFetch'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const ORE = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00']
 const GIORNI_BREVI = ['Lun','Mar','Mer','Gio','Ven','Sab']
 const GIORNI_FULL  = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato']
 const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre']
 
-const SLOT_H    = 60   // px per ora
-const ORA_INIZIO = 6   // 06:00
+const SLOT_H     = 60
+const ORA_INIZIO = 6
 
 function getLunedi(offset = 0) {
   const oggi = new Date()
-  const lun = new Date(oggi)
+  const lun  = new Date(oggi)
   lun.setDate(oggi.getDate() - ((oggi.getDay() + 6) % 7) + offset * 7)
   lun.setHours(0, 0, 0, 0)
   return lun
@@ -47,64 +47,48 @@ function getColoreEvento(ev, statiDB, staffDB) {
     if (s?.colore) return { bg: s.colore+'22', border: s.colore }
   }
   const fallback = { sky:'#0284C7',red:'#ef4444',green:'#16a34a',amber:'#ca8a04',purple:'#9333ea',blue:'#3b82f6',slate:'#64748b',fuchsia:'#d946ef' }
-  const hex = fallback[ev.colore] || '#0284C7'
-  return { bg: hex+'22', border: hex }
+  return { bg: (fallback[ev.colore]||'#0284C7')+'22', border: fallback[ev.colore]||'#0284C7' }
 }
 function calcolaLayout(lavori) {
   const events = lavori.map(ev => {
     if (!ev.data_inizio) return null
     const inizio = parseData(ev.data_inizio)
-    const fine   = ev.data_fine ? parseData(ev.data_fine) : new Date(inizio.getTime() + 30*60000)
-    const top    = (inizio.getHours() - ORA_INIZIO)*60 + inizio.getMinutes()
-    const h      = Math.max((fine - inizio)/60000, 24)
+    const fine   = ev.data_fine ? parseData(ev.data_fine) : new Date(inizio.getTime()+30*60000)
+    const top    = (inizio.getHours()-ORA_INIZIO)*60 + inizio.getMinutes()
+    const h      = Math.max((fine-inizio)/60000, 24)
     return { ev, inizio, fine, top, h, col:0, totCols:1 }
   }).filter(Boolean)
-  for (let i = 0; i < events.length; i++)
-    for (let j = i+1; j < events.length; j++) {
-      const a = events[i], b = events[j]
-      if (a.inizio < b.fine && a.fine > b.inizio) {
-        b.col = a.col + 1
+  for (let i=0; i<events.length; i++)
+    for (let j=i+1; j<events.length; j++) {
+      const a=events[i], b=events[j]
+      if (a.inizio<b.fine && a.fine>b.inizio) {
+        b.col = a.col+1
         const mx = Math.max(a.totCols, b.col+1)
-        events[i].totCols = mx; events[j].totCols = mx
+        events[i].totCols=mx; events[j].totCols=mx
       }
     }
   return events
 }
-function snap15(min) { return Math.round(min/15)*15 }
 function pad2(n) { return String(n).padStart(2,'0') }
 
-// ─────────────────────────────────────────────────────────────────────────────
-export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted, onOffsetChange, refreshKey=0, onEventoClick, onNuovoPrecompilato }) {
+export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0, onEventoClick, onNuovoPrecompilato }) {
   const oggi   = new Date()
   const lunedi = getLunedi(offsetSettimana)
   const giorni = getSettimana(lunedi)
 
-  // Legge initialDIdx una volta sola come valore iniziale dello state
-  const oggiIdx  = giorni.findIndex(d => d.toDateString() === oggi.toDateString())
-  const startIdx = (initialDIdx !== null) ? initialDIdx : (oggiIdx >= 0 ? oggiIdx : 0)
-  const [dIdx, setDIdx] = useState(startIdx)
+  const oggiIdx = giorni.findIndex(d => d.toDateString() === oggi.toDateString())
+  const [dIdx, setDIdx] = useState(oggiIdx >= 0 ? oggiIdx : 0)
 
   const [lavori,  setLavori]  = useState([])
   const [loading, setLoading] = useState(true)
   const [statiDB, setStatiDB] = useState([])
   const [staffDB, setStaffDB] = useState([])
 
-  // Drag state
-  const [dragging, setDragging] = useState(null)   // { id, ev, offsetMin, origTop }
-  const [dragTop,  setDragTop]  = useState(null)   // px corrente drag
-  const [ghostOra, setGhostOra] = useState(null)   // label orario drag
+  // Ghost hover — nuovo slot
+  const [ghost, setGhost] = useState(null)  // { top, ora, oraFine }
 
-  // Ghost hover (nuovo slot)
-  const [ghost, setGhost] = useState(null)          // { top, ora, oraFine }
+  const bodyRef = useRef(null)
 
-  const bodyRef     = useRef(null)
-  const colRef      = useRef(null)   // ref sulla colonna eventi
-  const didDragRef  = useRef(false)  // true se c'è stato movimento reale (distingue drag da click)
-
-  // ── Notifica App che il componente è montato (resetta il ref) ────────────────
-  useEffect(() => { onMounted?.() }, [])
-
-  // ── Dati ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     apiFetch('/api/stati-lavoro').then(r=>r.json()).then(setStatiDB).catch(()=>{})
     apiFetch('/api/utenti-staff').then(r=>r.json()).then(setStaffDB).catch(()=>{})
@@ -116,132 +100,52 @@ export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted,
     apiFetch(`/api/lavori?dal=${formatDate(lunedi)}&al=${formatDate(sabato)}`)
       .then(r=>r.json())
       .then(data => { setLavori(data); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(()=>setLoading(false))
   }, [offsetSettimana, refreshKey])
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 120 }, [])
 
-  // Quando cambia settimana (frecce), torna al giorno corrente se esiste
+  // Quando cambia settimana torna al giorno corrente se esiste, altrimenti lunedì
   useEffect(() => {
-    const ng = getSettimana(getLunedi(offsetSettimana))
+    const ng  = getSettimana(getLunedi(offsetSettimana))
     const idx = ng.findIndex(d => d.toDateString() === oggi.toDateString())
     setDIdx(idx >= 0 ? idx : 0)
   }, [offsetSettimana])
 
-  // ── Helpers coordinata Y relativa alla colonna eventi ─────────────────────────
-  function getColY(clientY) {
-    if (!colRef.current) return 0
-    const rect = colRef.current.getBoundingClientRect()
-    // scrollTop dalla colonna ore (parent scrollabile = bodyRef)
-    return clientY - rect.top + (bodyRef.current?.scrollTop || 0)
-  }
-
-  // ── Ghost hover ───────────────────────────────────────────────────────────────
-  function onColMouseMove(e) {
-    if (dragging) return
-    if (e.target.closest('[data-evento]')) { setGhost(null); return }
-    // rect relativo all'elemento che riceve l'evento (la colonna eventi)
-    const rect   = e.currentTarget.getBoundingClientRect()
-    const relY   = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
-    const snapPx = Math.floor(relY / 30) * 30
-    const mins   = Math.max(0, snapPx)
-    const h  = ORA_INIZIO + Math.floor(mins / 60)
-    const m  = mins % 60
-    const eh = ORA_INIZIO + Math.floor((mins+30) / 60)
-    const em = (mins+30) % 60
-    setGhost({ top: snapPx, ora: `${pad2(h)}:${pad2(m)}`, oraFine: `${pad2(eh)}:${pad2(em)}` })
-  }
-
-  // ── Click su slot vuoto ───────────────────────────────────────────────────────
-  function onColClick(e) {
-    if (didDragRef.current) return
-    if (e.target.closest('[data-evento]')) return
-    if (!onNuovoPrecompilato) return
-    const rect   = e.currentTarget.getBoundingClientRect()
-    const relY   = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
-    const mins   = snap15(Math.max(0, relY))
-    const h = ORA_INIZIO + Math.floor(mins/60)
-    const m = mins % 60
-    onNuovoPrecompilato({ data: giornoStr, ora: `${pad2(h)}:${pad2(m)}`, tipo_form: 'evento' })
-  }
-
-  // ── Drag start ────────────────────────────────────────────────────────────────
-  function onDragStart(e, ev, top) {
-    if (e.button !== 0) return
-    e.stopPropagation()
-    const rect     = e.currentTarget.getBoundingClientRect()
-    const clickY   = e.clientY - rect.top
-    didDragRef.current = false
-    setDragging({ id: ev.id, ev, offsetMin: Math.floor(clickY), origTop: top })
-    setDragTop(top)
-    setGhost(null)
-    const minTot = snap15(top)
-    setGhostOra(`${pad2(ORA_INIZIO + Math.floor(minTot/60))}:${pad2(minTot%60)}`)
-  }
-
-  // ── Drag move / up — global listeners ────────────────────────────────────────
-  const onMouseMove = useCallback((e) => {
-    if (!dragging) return
-    didDragRef.current = true
-    const rawTop  = getColY(e.clientY) - dragging.offsetMin
-    const snapTop = snap15(Math.max(0, rawTop))
-    setDragTop(snapTop)
-    setGhostOra(`${pad2(ORA_INIZIO + Math.floor(snapTop/60))}:${pad2(snapTop%60)}`)
-  }, [dragging])
-
-  const onMouseUp = useCallback(async (e) => {
-    if (!dragging) return
-    const wasDrag = didDragRef.current
-    const rawTop  = getColY(e.clientY) - dragging.offsetMin
-    const snapMin = snap15(Math.max(0, rawTop))
-    const ev      = dragging.ev
-    setDragging(null); setDragTop(null); setGhostOra(null)
-    didDragRef.current = false
-
-    if (!wasDrag) return  // era un click, non aggiornare
-
-    const nuovaInizio = new Date(giorno)
-    nuovaInizio.setHours(ORA_INIZIO + Math.floor(snapMin/60), snapMin%60, 0, 0)
-    const origInizio  = parseData(ev.data_inizio)
-    const origFine    = ev.data_fine ? parseData(ev.data_fine) : new Date(origInizio.getTime()+30*60000)
-    const durata      = origFine - origInizio
-    const nuovaFine   = new Date(nuovaInizio.getTime() + durata)
-
-    function fmt(d) {
-      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-    }
-    // Aggiornamento ottimistico UI
-    setLavori(prev => prev.map(l => l.id !== ev.id ? l : {
-      ...l, data_inizio: fmt(nuovaInizio).replace('T',' '), data_fine: fmt(nuovaFine).replace('T',' ')
-    }))
-    try {
-      await apiFetch(`/api/lavori/${ev.id}`, {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ data_inizio: fmt(nuovaInizio), data_fine: fmt(nuovaFine) }),
-      })
-    } catch { setLavori(prev => prev.map(l => l.id === ev.id ? ev : l)) }
-  }, [dragging, giorno])
-
-  useEffect(() => {
-    if (!dragging) return
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup',   onMouseUp)
-    return () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp) }
-  }, [dragging, onMouseMove, onMouseUp])
-
-  // ── Dati giorno corrente ──────────────────────────────────────────────────────
   const giorno    = giorni[dIdx]
   const isOggi    = giorno.toDateString() === oggi.toDateString()
   const nowTop    = getNowTop()
   const giornoStr = formatDate(giorno)
+
   const lavoriGiorno = lavori.filter(ev => ev.data_inizio?.slice(0,10) === giornoStr)
   const layout       = calcolaLayout(lavoriGiorno)
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--sur)', userSelect: dragging ? 'none' : 'auto' }}>
+  // ── Ghost hover ───────────────────────────────────────────────────────────────
+  function onColMouseMove(e) {
+    if (e.target.closest('[data-evento]')) { setGhost(null); return }
+    // rect relativo alla colonna eventi stessa (e.currentTarget)
+    const rect   = e.currentTarget.getBoundingClientRect()
+    const relY   = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
+    const snapPx = Math.floor(relY / 30) * 30
+    const mins   = Math.max(0, snapPx)
+    const h  = ORA_INIZIO + Math.floor(mins/60)
+    const m  = mins % 60
+    const eh = ORA_INIZIO + Math.floor((mins+30)/60)
+    const em = (mins+30) % 60
+    setGhost({ top: snapPx, ora:`${pad2(h)}:${pad2(m)}`, oraFine:`${pad2(eh)}:${pad2(em)}` })
+  }
 
-      {/* Tab giorni + frecce settimana */}
+  // ── Click su slot vuoto ───────────────────────────────────────────────────────
+  function onColClick(e) {
+    if (e.target.closest('[data-evento]')) return
+    if (!onNuovoPrecompilato || !ghost) return
+    onNuovoPrecompilato({ data: giornoStr, ora: ghost.ora, tipo_form: 'evento' })
+  }
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--sur)' }}>
+
+      {/* Tab giorni + frecce */}
       <div style={{ display:'flex', alignItems:'center', borderBottom:'1px solid var(--bor)', background:'var(--sur)', flexShrink:0, padding:'0 8px', gap:'4px' }}>
         <button onClick={() => onOffsetChange?.(offsetSettimana-1)}
           style={{ width:'32px', height:'32px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', cursor:'pointer', fontSize:'16px', color:'var(--tx2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>‹</button>
@@ -249,12 +153,13 @@ export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted,
         <div style={{ display:'flex', flex:1 }}>
           <div style={{ width:'44px', flexShrink:0 }} />
           {giorni.map((d,i) => {
-            const isT = d.toDateString() === oggi.toDateString()
+            const isT   = d.toDateString() === oggi.toDateString()
             const isSel = i === dIdx
             return (
               <div key={i} onClick={() => setDIdx(i)} style={{ flex:1, padding:'8px 4px', textAlign:'center', cursor:'pointer', borderBottom: isSel ? '2px solid var(--accent)' : '2px solid transparent', marginBottom:'-1px' }}>
                 <div style={{ fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color: isSel ? 'var(--accent)' : 'var(--tx3)', marginBottom:'3px' }}>{GIORNI_BREVI[i]}</div>
-                <div style={{ fontSize: isT?'13px':'18px', fontWeight: isT?700:300, color: isT?'#fff': isSel?'var(--accent)':'var(--tx2)', lineHeight:1,
+                <div style={{ fontSize: isT?'13px':'18px', fontWeight: isT?700:300, lineHeight:1,
+                  color: isT?'#fff': isSel?'var(--accent)':'var(--tx2)',
                   ...(isT ? { background:'var(--accent)', width:'28px', height:'28px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' } : {}) }}>
                   {d.getDate()}
                 </div>
@@ -309,13 +214,11 @@ export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted,
 
           {/* Colonna eventi */}
           <div
-            ref={colRef}
             onMouseMove={onColMouseMove}
             onMouseLeave={() => setGhost(null)}
             onClick={onColClick}
             style={{ borderLeft:'1px solid var(--borl)', position:'relative', background: isOggi ? 'rgba(2,132,199,.015)' : 'transparent', cursor: onNuovoPrecompilato ? 'pointer' : 'default' }}
           >
-            {/* Righe ore */}
             {ORE.map(ora => (
               <div key={ora} style={{ height:`${SLOT_H}px`, borderBottom:'1px solid var(--borl)', position:'relative' }}>
                 <div style={{ position:'absolute', left:0, right:0, top:'50%', height:'1px', background:'var(--borl)', opacity:.4 }} />
@@ -323,7 +226,7 @@ export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted,
             ))}
 
             {/* Ghost hover — nuovo slot */}
-            {ghost && !dragging && (
+            {ghost && (
               <div style={{ position:'absolute', top:`${ghost.top}px`, left:'3px', right:'3px', height:'30px',
                 background:'rgba(217,70,239,.12)', border:'1.5px dashed rgba(217,70,239,.45)',
                 borderRadius:'5px', pointerEvents:'none', zIndex:3,
@@ -332,21 +235,8 @@ export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted,
               </div>
             )}
 
-            {/* Ghost drag — spostamento evento */}
-            {dragging && dragTop !== null && (
-              <div style={{ position:'absolute', top:`${dragTop}px`, left:'4px', right:'4px', height:'48px',
-                background:'var(--accent)', opacity:.2, borderRadius:'7px', zIndex:20, pointerEvents:'none',
-                display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <span style={{ fontSize:'11px', fontWeight:700, color:'var(--accent)', background:'white', padding:'2px 8px', borderRadius:'4px', opacity:1 }}>
-                  {ghostOra}
-                </span>
-              </div>
-            )}
-
             {/* Eventi */}
             {layout.map(({ ev, top, h, col, totCols }) => {
-              const isDraggingThis = dragging?.id === ev.id
-              const displayTop = isDraggingThis ? (dragTop ?? top) : top
               const c = getColoreEvento(ev, statiDB, staffDB)
               const inizio = parseData(ev.data_inizio)
               const oraLabel = `${pad2(inizio.getHours())}:${pad2(inizio.getMinutes())}`
@@ -356,26 +246,18 @@ export default function Giorno({ offsetSettimana=0, initialDIdx=null, onMounted,
 
               return (
                 <div key={ev.id} data-evento="true"
-                  onMouseDown={e => onDragStart(e, ev, top)}
-                  onClick={e => { e.stopPropagation(); if (!didDragRef.current) onEventoClick(ev) }}
+                  onClick={e => { e.stopPropagation(); onEventoClick(ev) }}
                   style={{
-                    position:'absolute', top:`${displayTop}px`, height:`${h}px`,
+                    position:'absolute', top:`${top}px`, height:`${h}px`,
                     left:`calc(${leftPct}% + 4px)`, width:`calc(${widthPct}% - 8px)`,
                     background: c.border, borderLeft:`4px solid ${c.bg}`,
                     color: testoAdattivo(c.border), borderRadius:'7px', padding:'4px 8px',
-                    cursor: isDraggingThis ? 'grabbing' : 'grab',
-                    overflow:'hidden', zIndex: isDraggingThis ? 50 : 10+col,
-                    boxShadow: isDraggingThis ? '0 4px 20px rgba(2,132,199,.35)' : '0 1px 4px rgba(15,23,42,.07)',
+                    cursor:'pointer', overflow:'hidden', zIndex:10+col,
+                    boxShadow:'0 1px 4px rgba(15,23,42,.07)',
                     display:'flex', alignItems:'center', gap:'6px',
-                    opacity: isDraggingThis ? 0.85 : 1,
-                    transition: isDraggingThis ? 'none' : 'box-shadow .1s',
                   }}>
-                  <span style={{ fontFamily:'JetBrains Mono, monospace', fontSize:'10px', fontWeight:700, opacity:.8, flexShrink:0 }}>
-                    {isDraggingThis && ghostOra ? ghostOra : oraLabel}
-                  </span>
-                  <span style={{ fontSize:'12px', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
-                    {rigaInfo}
-                  </span>
+                  <span style={{ fontFamily:'JetBrains Mono, monospace', fontSize:'10px', fontWeight:700, opacity:.8, flexShrink:0 }}>{oraLabel}</span>
+                  <span style={{ fontSize:'12px', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{rigaInfo}</span>
                   {ev.urgente && <span style={{ fontSize:'9px', background:'var(--red)', color:'#fff', padding:'1px 5px', borderRadius:'3px', fontWeight:700, flexShrink:0 }}>⚡</span>}
                 </div>
               )

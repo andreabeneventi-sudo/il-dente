@@ -413,7 +413,7 @@ const [lavoroCorrente, setLavoroCorrente] = useState(lavoro)
 
       onSaved()
       setSalvato(true)
-      setTimeout(() => setSalvato(false), 3000)
+      setTimeout(() => setSalvato(false), isMobile ? 8000 : 3000)
     } catch {
       setErrore('Errore durante il salvataggio. Riprova.')
     }
@@ -892,10 +892,11 @@ const salvaRef = useRef(null)
             </button>
           )}
 
-          {/* Toast notifica salvataggio — con tasto PDF su mobile */}
+          {/* Toast notifica salvataggio */}
           <div style={{
             position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)',
-            zIndex:999, pointerEvents: salvato ? 'auto' : 'none',
+            zIndex:999,
+            pointerEvents: salvato ? 'auto' : 'none',
             opacity: salvato ? 1 : 0,
             transition: 'opacity 0.7s ease',
           }}>
@@ -908,12 +909,18 @@ const salvaRef = useRef(null)
             }}>
               ✅ Salvato
               {mostraPDF && isMobile && (
-                <button onClick={stampaPDF} disabled={stampando} style={{
-                  padding:'5px 12px', border:'none', background:'rgba(255,255,255,.2)',
-                  borderRadius:'6px', fontSize:'12px', fontWeight:700,
-                  cursor:'pointer', color:'#fff', fontFamily:'Instrument Sans, sans-serif',
-                }}>
-                  {stampando ? '...' : '📄 Apri PDF'}
+                <button
+                  onClick={stampaPDF}
+                  disabled={stampando}
+                  style={{
+                    padding:'5px 14px', border:'none',
+                    background:'rgba(255,255,255,.25)', color:'#fff',
+                    borderRadius:'7px', fontSize:'12px', fontWeight:700,
+                    cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
+                    opacity: stampando ? .6 : 1,
+                  }}
+                >
+                  {stampando ? '...' : '📄 PDF'}
                 </button>
               )}
             </div>
