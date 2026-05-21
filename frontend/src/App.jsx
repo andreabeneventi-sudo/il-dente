@@ -1,6 +1,6 @@
 import { apiFetch } from './utils/apiFetch'
 import './App.css'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Sidebar from './components/Sidebar'
@@ -41,7 +41,7 @@ function AppInterna() {
   const [lavoroPrecompilato, setLavoroPrecompilato] = useState(null)
   const [lavoroEspanso, setLavoroEspanso] = useState(null)
   const [paginaPrecedente, setPaginaPrecedente] = useState('cal')
-  const [giornoRitorno, setGiornoRitorno] = useState(null) // idx giorno da ripristinare su Giorno
+  const giornoRitornoRef = useRef(null) // ref: non causa re-render, disponibile subito al mount di Giorno
   const [refreshKey, setRefreshKey] = useState(0)
   const [contatori, setContatori] = useState({ attivi:0, inRitardo:0, urgenti:0, clienti:0 })
   const [formSalva, setFormSalva] = useState(null) // { salva, saving, hasChanges } esposto da FormLavoro
@@ -98,10 +98,9 @@ function AppInterna() {
     if (lavoro?.data_inizio) {
       const d = new Date(lavoro.data_inizio.replace(' ', 'T'))
       const dow = d.getDay()
-      const idx = dow === 0 ? 5 : dow - 1
-      setGiornoRitorno(idx)
+      giornoRitornoRef.current = dow === 0 ? 5 : dow - 1
     } else {
-      setGiornoRitorno(null)
+      giornoRitornoRef.current = null
     }
     setLavoroEspanso(lavoro)
     setActive('pagina-lavoro')
@@ -153,12 +152,12 @@ function AppInterna() {
       case 'giorno': return (
         <Giorno
           offsetSettimana={offsetSettimana}
-          initialDIdx={giornoRitorno}
-          onInitialDIdxConsumed={() => setGiornoRitorno(null)}
+          initialDIdx={giornoRitornoRef.current}
           refreshKey={refreshKey}
           onEventoClick={apriModifica}
           onOffsetChange={setOffsetSettimana}
           onNuovoPrecompilato={apriNuovoPrecompilato}
+          onMounted={() => { giornoRitornoRef.current = null }}
         />
       )
       case 'list': return (
