@@ -478,7 +478,13 @@ const [lavoroCorrente, setLavoroCorrente] = useState(lavoro)
     const GIORNI = ['Domenica','Lunedi','Martedi','Mercoledi','Giovedi','Venerdi','Sabato']
     function sanitize(str) {
       if (!str) return ''
-      return str.replace(/à/g,'a').replace(/è/g,'e').replace(/é/g,'e').replace(/ì/g,'i').replace(/ò/g,'o').replace(/ù/g,'u').replace(/[^\x00-\xFF]/g,'?')
+      return str
+        .replace(/\r\n/g,' ').replace(/\r/g,' ').replace(/\n/g,' ')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'')
+        .replace(/à/g,'a').replace(/À/g,'A').replace(/è/g,'e').replace(/È/g,'E')
+        .replace(/é/g,'e').replace(/É/g,'E').replace(/ì/g,'i').replace(/Ì/g,'I')
+        .replace(/ò/g,'o').replace(/Ò/g,'O').replace(/ù/g,'u').replace(/Ù/g,'U')
+        .replace(/[^\x00-\xFF]/g,'?')
     }
     function formatData(str) {
       if (!str) return ''

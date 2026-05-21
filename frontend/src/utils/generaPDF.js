@@ -13,6 +13,8 @@ function formatDataConsegna(str) {
 function sanitize(str) {
   if (!str) return ''
   return str
+    .replace(/\r\n/g, ' ').replace(/\r/g, ' ').replace(/\n/g, ' ')  // newline → spazio
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')               // altri caratteri di controllo
     .replace(/à/g,'a').replace(/À/g,'A')
     .replace(/è/g,'e').replace(/È/g,'E')
     .replace(/é/g,'e').replace(/É/g,'E')
@@ -49,46 +51,56 @@ export async function generaPDF(lavoro, impostazioni = {}, soloStorico = false) 
   drawText(lavoro.elementi || '',                          xVal, 178.83)
 
   if (lavoro.note && lavoro.note.trim()) {
-    const parole = sanitize(lavoro.note).split(' ')
     // A4: 595pt. xNote=184.25, margine destro ~28pt → disponibile ~382pt
     const maxW   = 368
-    let riga = '', rigaY = 202.50
+    let rigaY = 202.50
 
-    function flushRiga() {
-      if (!riga) return
-      // Se la riga stessa è troppo lunga (parola singola), la spezza carattere per carattere
-      while (font.widthOfTextAtSize(riga, fSize) > maxW) {
-        let taglio = riga.length - 1
-        while (taglio > 0 && font.widthOfTextAtSize(riga.slice(0, taglio), fSize) > maxW) taglio--
-        drawText(riga.slice(0, taglio), xNote, rigaY)
-        riga = riga.slice(taglio)
-        rigaY += 13
-      }
-      if (riga) { drawText(riga, xNote, rigaY); rigaY += 13; riga = '' }
-    }
+    // Splitta prima per newline espliciti, poi fai word-wrap su ogni paragrafo
+    const paragrafi = lavoro.note.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
 
-    for (const parola of parole) {
-      const testRiga = riga ? `${riga} ${parola}` : parola
-      if (font.widthOfTextAtSize(testRiga, fSize) > maxW && riga) {
-        // flush riga corrente e inizia nuova
-        drawText(riga, xNote, rigaY)
+    for (const paragrafo of paragrafi) {
+      const parole = sanitize(paragrafo).split(' ').filter(p => p !== '')
+
+      if (parole.length === 0) {
+        // Riga vuota: lascia spazio
         rigaY += 13
-        riga = parola
-      } else {
-        riga = testRiga
+        continue
       }
-    }
-    // flush ultima riga (senza incrementare rigaY dopo)
-    if (riga) {
-      // Gestisce anche ultima riga troppo lunga
-      while (font.widthOfTextAtSize(riga, fSize) > maxW) {
-        let taglio = riga.length - 1
-        while (taglio > 0 && font.widthOfTextAtSize(riga.slice(0, taglio), fSize) > maxW) taglio--
-        drawText(riga.slice(0, taglio), xNote, rigaY)
-        riga = riga.slice(taglio)
+
+      let riga = ''
+      for (const parola of parole) {
+        const testRiga = riga ? `${riga} ${parola}` : parola
+        if (font.widthOfTextAtSize(testRiga, fSize) > maxW && riga) {
+          // flush riga corrente
+          // gestisci parola singola troppo lunga
+          let r = riga
+          while (font.widthOfTextAtSize(r, fSize) > maxW) {
+            let taglio = r.length - 1
+            while (taglio > 0 && font.widthOfTextAtSize(r.slice(0, taglio), fSize) > maxW) taglio--
+            drawText(r.slice(0, taglio), xNote, rigaY)
+            r = r.slice(taglio)
+            rigaY += 13
+          }
+          drawText(r, xNote, rigaY)
+          rigaY += 13
+          riga = parola
+        } else {
+          riga = testRiga
+        }
+      }
+      // flush ultima riga del paragrafo
+      if (riga) {
+        let r = riga
+        while (font.widthOfTextAtSize(r, fSize) > maxW) {
+          let taglio = r.length - 1
+          while (taglio > 0 && font.widthOfTextAtSize(r.slice(0, taglio), fSize) > maxW) taglio--
+          drawText(r.slice(0, taglio), xNote, rigaY)
+          r = r.slice(taglio)
+          rigaY += 13
+        }
+        drawText(r, xNote, rigaY)
         rigaY += 13
       }
-      drawText(riga, xNote, rigaY)
     }
   }
 
