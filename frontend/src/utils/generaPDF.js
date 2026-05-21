@@ -51,8 +51,8 @@ export async function generaPDF(lavoro, impostazioni = {}, soloStorico = false) 
   drawText(lavoro.elementi || '',                          xVal, 178.83)
 
   if (lavoro.note && lavoro.note.trim()) {
-    // A4: 595pt. xNote=184.25, margine destro ~28pt → disponibile ~382pt
-    const maxW   = 368
+    // Biglietto: linee template da x=181.42 a x=413.86 → disponibile 229.61pt
+    const maxW   = 224 // biglietto: 413.86 - 184.25 = 229.61pt, margine -5
     let rigaY = 202.50
 
     // Splitta prima per newline espliciti, poi fai word-wrap su ogni paragrafo
