@@ -154,6 +154,7 @@ function AppInterna() {
         <Giorno
           offsetSettimana={offsetSettimana}
           initialDIdx={giornoRitorno}
+          onInitialDIdxConsumed={() => setGiornoRitorno(null)}
           refreshKey={refreshKey}
           onEventoClick={apriModifica}
           onOffsetChange={setOffsetSettimana}

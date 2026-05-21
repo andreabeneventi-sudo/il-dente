@@ -892,21 +892,30 @@ const salvaRef = useRef(null)
             </button>
           )}
 
-          {/* Toast notifica salvataggio */}
+          {/* Toast notifica salvataggio — con tasto PDF su mobile */}
           <div style={{
             position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)',
-            zIndex:999, pointerEvents:'none',
+            zIndex:999, pointerEvents: salvato ? 'auto' : 'none',
             opacity: salvato ? 1 : 0,
             transition: 'opacity 0.7s ease',
           }}>
             <div style={{
-              display:'flex', alignItems:'center', gap:'8px',
+              display:'flex', alignItems:'center', gap:'10px',
               background:'#15803d', color:'#fff',
-              borderRadius:'10px', padding:'10px 22px',
+              borderRadius:'10px', padding:'10px 18px',
               fontSize:'13px', fontWeight:700,
               boxShadow:'0 4px 20px rgba(15,23,42,.18)',
             }}>
               ✅ Salvato
+              {mostraPDF && isMobile && (
+                <button onClick={stampaPDF} disabled={stampando} style={{
+                  padding:'5px 12px', border:'none', background:'rgba(255,255,255,.2)',
+                  borderRadius:'6px', fontSize:'12px', fontWeight:700,
+                  cursor:'pointer', color:'#fff', fontFamily:'Instrument Sans, sans-serif',
+                }}>
+                  {stampando ? '...' : '📄 Apri PDF'}
+                </button>
+              )}
             </div>
           </div>
 

@@ -101,7 +101,7 @@ function arrotondaMinuti(min) {
   return Math.round(min / 15) * 15
 }
 
-export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffsetChange, refreshKey = 0, onEventoClick, onNuovoPrecompilato }) {
+export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onInitialDIdxConsumed, onOffsetChange, refreshKey = 0, onEventoClick, onNuovoPrecompilato }) {
   const oggi   = new Date()
   const lunedi = getLunedi(offsetSettimana)
   const giorni = getSettimana(lunedi)
@@ -118,8 +118,12 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
   const [dragTop,  setDragTop]    = useState(null)   // px top durante drag
   const [ghostOra, setGhostOra]   = useState(null)   // "HH:MM" label ghost
 
-  const bodyRef  = useRef(null)
-  const gridRef  = useRef(null)
+  // Ghost hover (nuovo slot)
+  const [ghost, setGhost] = useState(null)  // { top, ora, oraFine }
+
+  const bodyRef    = useRef(null)
+  const gridRef    = useRef(null)
+  const draggingRef = useRef(false) // ref sincrono per bloccare click dopo drag
 
   useEffect(() => {
     apiFetch('/api/stati-lavoro').then(r => r.json()).then(setStatiDB).catch(() => {})
@@ -139,6 +143,14 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 120
   }, [])
+
+  // Aggiorna dIdx quando torniamo da PaginaLavoro con un giorno specifico
+  useEffect(() => {
+    if (initialDIdx !== null) {
+      setDIdx(initialDIdx)
+      onInitialDIdxConsumed?.()  // resetta in App per non ripetere al prossimo render
+    }
+  }, [initialDIdx])
 
   // Aggiorna dIdx quando cambia settimana: cerca il giorno corrente nella nuova settimana
   useEffect(() => {
@@ -177,8 +189,10 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
     const rect = e.currentTarget.getBoundingClientRect()
     const clickY = e.clientY - rect.top
     const offsetMin = Math.floor(clickY)   // px ≈ min (1px = 1min)
+    draggingRef.current = false  // reset: diventa true solo se si muove
     setDragging({ id: ev.id, ev, offsetMin, originalTop: top })
     setDragTop(top)
+    setGhost(null)
     // Calcola etichetta ora ghost
     const minTot = arrotondaMinuti(top)
     const h = Math.floor(minTot / 60) + ORA_INIZIO
@@ -189,6 +203,7 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
 
   const onMouseMove = useCallback((e) => {
     if (!dragging) return
+    draggingRef.current = true  // c'è stato movimento → non scattare click
     const rawTop  = getGridTop(e.clientY) - dragging.offsetMin
     const snapTop = arrotondaMinuti(Math.max(0, rawTop))
     setDragTop(snapTop)
@@ -200,11 +215,16 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
 
   const onMouseUp = useCallback(async (e) => {
     if (!dragging) return
+    const wasDragging = draggingRef.current
     const rawTop  = getGridTop(e.clientY) - dragging.offsetMin
     const snapMin = arrotondaMinuti(Math.max(0, rawTop))
     setDragging(null)
     setDragTop(null)
     setGhostOra(null)
+
+    // Se non c'è stato movimento reale, non aggiornare (era un click)
+    if (!wasDragging) return
+    draggingRef.current = false
 
     // Calcola nuova data_inizio
     const ev = dragging.ev
@@ -255,7 +275,7 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
 
   // ── Click su slot vuoto ───────────────────────────────────────────────────────
   function onSlotClick(e) {
-    if (dragging) return
+    if (draggingRef.current) return  // stava draggando
     if (!onNuovoPrecompilato) return
     const rect = gridRef.current.getBoundingClientRect()
     const relY  = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
@@ -268,6 +288,23 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
       ora,
       tipo_form: 'evento',
     })
+  }
+
+  // ── Ghost hover (nuovo slot) ──────────────────────────────────────────────────
+  function onGhostMove(e) {
+    if (dragging) return  // durante drag non mostrare ghost hover
+    if (e.target.closest('[data-evento]')) { setGhost(null); return }
+    const rect = gridRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const relY   = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
+    const snapPx = Math.floor(relY / 30) * 30
+    const mins   = Math.max(0, snapPx)
+    const h      = ORA_INIZIO + Math.floor(mins / 60)
+    const m      = mins % 60
+    const eh     = ORA_INIZIO + Math.floor((mins + 30) / 60)
+    const em     = (mins + 30) % 60
+    const pad    = n => String(n).padStart(2, '0')
+    setGhost({ top: snapPx, ora: `${pad(h)}:${pad(m)}`, oraFine: `${pad(eh)}:${pad(em)}` })
   }
 
   return (
@@ -368,8 +405,10 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
           {/* Colonna eventi — cliccabile per nuovo slot */}
           <div
             ref={gridRef}
+            onMouseMove={onGhostMove}
+            onMouseLeave={() => setGhost(null)}
             onClick={onSlotClick}
-            style={{ borderLeft:'1px solid var(--borl)', position:'relative', background: isOggi ? 'rgba(2,132,199,.015)' : 'transparent', cursor: onNuovoPrecompilato ? 'crosshair' : 'default' }}
+            style={{ borderLeft:'1px solid var(--borl)', position:'relative', background: isOggi ? 'rgba(2,132,199,.015)' : 'transparent', cursor: onNuovoPrecompilato ? 'pointer' : 'default' }}
           >
             {ORE.map(ora => (
               <div key={ora} style={{ height:`${SLOT_H}px`, borderBottom:'1px solid var(--borl)', position:'relative' }}>
@@ -377,12 +416,26 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
               </div>
             ))}
 
-            {/* Ghost drag */}
+            {/* Ghost hover — nuovo slot */}
+            {ghost && !dragging && (
+              <div style={{
+                position:'absolute', top:`${ghost.top}px`,
+                left:'3px', right:'3px', height:'30px',
+                background:'rgba(217,70,239,.12)',
+                border:'1.5px dashed rgba(217,70,239,.45)',
+                borderRadius:'5px', pointerEvents:'none', zIndex:3,
+                display:'flex', alignItems:'center', padding:'0 6px',
+                fontSize:'10px', fontWeight:600, color:'#d946ef',
+              }}>
+                {ghost.ora} – {ghost.oraFine}
+              </div>
+            )}
+
+            {/* Ghost drag — spostamento evento */}
             {dragging && dragTop !== null && (
               <div style={{
                 position:'absolute', top:`${dragTop}px`,
-                left:'4px', right:'4px',
-                height:'48px',
+                left:'4px', right:'4px', height:'48px',
                 background:'var(--accent)', opacity:.25,
                 borderRadius:'7px', zIndex:20, pointerEvents:'none',
                 display:'flex', alignItems:'center', justifyContent:'center',
@@ -413,14 +466,14 @@ export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffs
               return (
                 <div
                   key={ev.id}
+                  data-evento="true"
                   onMouseDown={(e) => {
-                    // inizia drag solo col tasto sinistro
                     if (e.button !== 0) return
                     onDragStart(e, ev, top)
                   }}
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (!dragging) onEventoClick(ev)
+                    if (!draggingRef.current) onEventoClick(ev)
                   }}
                   style={{
                     position:'absolute',
