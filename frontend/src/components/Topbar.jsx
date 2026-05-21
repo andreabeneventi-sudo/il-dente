@@ -232,7 +232,7 @@ export default function Topbar({ active, onNav, offsetSettimana, onPrev, onNext,
         </span>
       )}
 
-      {active === 'cal' && (
+      {(active === 'cal' || active === 'giorno') && (
         <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
           <button style={btnStyle} onClick={onPrev}>‹</button>
           <span style={{ fontSize:'12px', fontWeight:600, color:'var(--tx2)', minWidth:'148px', textAlign:'center' }}>
