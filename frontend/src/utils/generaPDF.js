@@ -50,20 +50,46 @@ export async function generaPDF(lavoro, impostazioni = {}, soloStorico = false) 
 
   if (lavoro.note && lavoro.note.trim()) {
     const parole = sanitize(lavoro.note).split(' ')
-    const maxW   = 320
+    // A4: 595pt. xNote=184.25, margine destro ~28pt → disponibile ~382pt
+    const maxW   = 368
     let riga = '', rigaY = 202.50
-    for (const parola of parole) {
-      const test = riga ? `${riga} ${parola}` : parola
-      const w    = font.widthOfTextAtSize(test, fSize)
-      if (w > maxW && riga) {
-        drawText(riga, xNote, rigaY)
-        riga  = parola
+
+    function flushRiga() {
+      if (!riga) return
+      // Se la riga stessa è troppo lunga (parola singola), la spezza carattere per carattere
+      while (font.widthOfTextAtSize(riga, fSize) > maxW) {
+        let taglio = riga.length - 1
+        while (taglio > 0 && font.widthOfTextAtSize(riga.slice(0, taglio), fSize) > maxW) taglio--
+        drawText(riga.slice(0, taglio), xNote, rigaY)
+        riga = riga.slice(taglio)
         rigaY += 13
+      }
+      if (riga) { drawText(riga, xNote, rigaY); rigaY += 13; riga = '' }
+    }
+
+    for (const parola of parole) {
+      const testRiga = riga ? `${riga} ${parola}` : parola
+      if (font.widthOfTextAtSize(testRiga, fSize) > maxW && riga) {
+        // flush riga corrente e inizia nuova
+        drawText(riga, xNote, rigaY)
+        rigaY += 13
+        riga = parola
       } else {
-        riga = test
+        riga = testRiga
       }
     }
-    if (riga) drawText(riga, xNote, rigaY)
+    // flush ultima riga (senza incrementare rigaY dopo)
+    if (riga) {
+      // Gestisce anche ultima riga troppo lunga
+      while (font.widthOfTextAtSize(riga, fSize) > maxW) {
+        let taglio = riga.length - 1
+        while (taglio > 0 && font.widthOfTextAtSize(riga.slice(0, taglio), fSize) > maxW) taglio--
+        drawText(riga.slice(0, taglio), xNote, rigaY)
+        riga = riga.slice(taglio)
+        rigaY += 13
+      }
+      drawText(riga, xNote, rigaY)
+    }
   }
 
   if (lavoro.codice) {

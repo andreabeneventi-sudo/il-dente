@@ -442,7 +442,14 @@ const [lavoroCorrente, setLavoroCorrente] = useState(lavoro)
     setStampando(true)
     try {
       const { url } = await generaPDF(lavoroCorrente, impostazioni)
-      setPannelloPDF({ url, versione: 'corrente', nome: `PDF_${lavoroCorrente.codice || lavoroCorrente.id}.pdf` })
+      if (isMobile) {
+        const a = document.createElement('a')
+        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+      } else {
+        setPannelloPDF({ url, versione: 'corrente', nome: `PDF_${lavoroCorrente.codice || lavoroCorrente.id}.pdf` })
+      }
     } catch(e) {
       console.error('Errore generaPDF:', e)
     }
@@ -865,6 +872,18 @@ const salvaRef = useRef(null)
                 />
               )}
             </div>
+          )}
+
+          {/* Tasto PDF su mobile (appare dopo il primo salvataggio) */}
+          {mostraPDF && isMobile && (
+            <button onClick={stampaPDF} disabled={stampando} style={{
+              padding:'7px 14px', border:'1px solid var(--bor)', background:'var(--sur2)',
+              borderRadius:'8px', fontSize:'11px', fontWeight:600, cursor:'pointer',
+              fontFamily:'Instrument Sans, sans-serif', color:'var(--tx2)',
+              opacity: stampando ? .6 : 1,
+            }}>
+              {stampando ? '...' : '📄 PDF'}
+            </button>
           )}
 
           {/* Toast notifica salvataggio */}

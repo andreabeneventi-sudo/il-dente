@@ -384,6 +384,20 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
   const statoCorrente = statiDB.find(s => String(s.id) === form.stato_id)
   const clienteNome = lavoro.cliente_display || lavoro.clinica || ''
 
+  const [stampando, setStampando] = useState(false)
+
+  async function apriPDF() {
+    setStampando(true)
+    try {
+      const { url } = await generaPDF({ ...lavoro, cliente_display: clienteNome }, impostazioni)
+      const a = document.createElement('a')
+      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch(e) { console.error('Errore PDF:', e) }
+    setStampando(false)
+  }
+
   const hasChanges = (
     form.paziente     !== (lavoro.paziente     ?? '') ||
     form.tipo         !== (lavoro.tipo         ?? '') ||
@@ -439,6 +453,12 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
         <button onClick={salva} disabled={saving || !hasChanges} style={{ padding:'8px 20px', border:'none', background:'var(--accent)', color:'#fff', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor: hasChanges ? 'pointer' : 'not-allowed', fontFamily:'Instrument Sans, sans-serif', boxShadow:'0 2px 8px rgba(2,132,199,.3)', opacity: saving || !hasChanges ? .4 : 1 }}>
           {saving ? 'Salvataggio...' : 'Salva'}
         </button>
+
+        {lavoro.tipo_record !== 'evento' && (
+          <button onClick={apriPDF} disabled={stampando} style={{ padding:'8px 14px', border:'1px solid var(--bor)', background:'var(--sur2)', color:'var(--tx2)', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', opacity: stampando ? .6 : 1 }}>
+            {stampando ? '...' : '📄 PDF'}
+          </button>
+        )}
       </div>
 
       {/* Body */}

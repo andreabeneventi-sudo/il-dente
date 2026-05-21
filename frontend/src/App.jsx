@@ -41,6 +41,7 @@ function AppInterna() {
   const [lavoroPrecompilato, setLavoroPrecompilato] = useState(null)
   const [lavoroEspanso, setLavoroEspanso] = useState(null)
   const [paginaPrecedente, setPaginaPrecedente] = useState('cal')
+  const [giornoRitorno, setGiornoRitorno] = useState(null) // idx giorno da ripristinare su Giorno
   const [refreshKey, setRefreshKey] = useState(0)
   const [contatori, setContatori] = useState({ attivi:0, inRitardo:0, urgenti:0, clienti:0 })
   const [formSalva, setFormSalva] = useState(null) // { salva, saving, hasChanges } esposto da FormLavoro
@@ -94,6 +95,14 @@ function AppInterna() {
 
   function apriPagina(lavoro) {
     setPaginaPrecedente(active)
+    if (lavoro?.data_inizio) {
+      const d = new Date(lavoro.data_inizio.replace(' ', 'T'))
+      const dow = d.getDay()
+      const idx = dow === 0 ? 5 : dow - 1
+      setGiornoRitorno(idx)
+    } else {
+      setGiornoRitorno(null)
+    }
     setLavoroEspanso(lavoro)
     setActive('pagina-lavoro')
     setShowForm(false)
@@ -144,8 +153,11 @@ function AppInterna() {
       case 'giorno': return (
         <Giorno
           offsetSettimana={offsetSettimana}
+          initialDIdx={giornoRitorno}
           refreshKey={refreshKey}
           onEventoClick={apriModifica}
+          onOffsetChange={setOffsetSettimana}
+          onNuovoPrecompilato={apriNuovoPrecompilato}
         />
       )
       case 'list': return (

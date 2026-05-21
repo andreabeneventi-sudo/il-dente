@@ -1,20 +1,13 @@
 import { apiFetch } from '../utils/apiFetch'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 const ORE = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00']
 const GIORNI_BREVI = ['Lun','Mar','Mer','Gio','Ven','Sab']
 const GIORNI_FULL  = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato']
 const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre']
 
-const colori = {
-  sky:    { bg:'#dbeafe', border:'#0284C7', color:'#0c4a6e' },
-  red:    { bg:'#fee2e2', border:'#ef4444', color:'#7f1d1d' },
-  green:  { bg:'#dcfce7', border:'#16a34a', color:'#14532d' },
-  amber:  { bg:'#fef9c3', border:'#ca8a04', color:'#713f12' },
-  purple: { bg:'#f3e8ff', border:'#9333ea', color:'#581c87' },
-  blue:   { bg:'#dbeafe', border:'#3b82f6', color:'#1e3a8a' },
-  slate:  { bg:'#f1f5f9', border:'#64748b', color:'#334155' },
-}
+const SLOT_H = 60        // px per ora
+const ORA_INIZIO = 6     // 06:00
 
 function getLunedi(offset = 0) {
   const oggi = new Date()
@@ -38,13 +31,12 @@ function formatDate(d) {
 
 function getNowTop() {
   const ora = new Date()
-  const minDa6 = (ora.getHours() - 6) * 60 + ora.getMinutes()
+  const minDa6 = (ora.getHours() - ORA_INIZIO) * 60 + ora.getMinutes()
   return Math.max(0, minDa6)
 }
 
 function parseData(str) {
   if (!str) return null
-  // Safari non accetta "2026-05-15 09:00:00" — serve la T come separatore
   return new Date(str.replace(' ', 'T'))
 }
 
@@ -85,7 +77,7 @@ function calcolaLayout(lavori) {
     if (!ev.data_inizio) return null
     const inizio = parseData(ev.data_inizio)
     const fine   = ev.data_fine ? parseData(ev.data_fine) : new Date(inizio.getTime() + 30 * 60000)
-    const top    = (inizio.getHours() - 6) * 60 + inizio.getMinutes()
+    const top    = (inizio.getHours() - ORA_INIZIO) * 60 + inizio.getMinutes()
     const h      = Math.max((fine - inizio) / 60000, 24)
     return { ev, inizio, fine, top, h, col: 0, totCols: 1 }
   }).filter(Boolean)
@@ -104,22 +96,30 @@ function calcolaLayout(lavori) {
   return events
 }
 
-export default function Giorno({ offsetSettimana = 0, refreshKey = 0, onEventoClick }) {
+// Arrotonda ai 15 minuti più vicini
+function arrotondaMinuti(min) {
+  return Math.round(min / 15) * 15
+}
+
+export default function Giorno({ offsetSettimana = 0, initialDIdx = null, onOffsetChange, refreshKey = 0, onEventoClick, onNuovoPrecompilato }) {
   const oggi   = new Date()
   const lunedi = getLunedi(offsetSettimana)
   const giorni = getSettimana(lunedi)
 
-  const defaultIdx = giorni.findIndex(d => d.toDateString() === oggi.toDateString())
-  const [dIdx, setDIdx]     = useState(defaultIdx >= 0 ? defaultIdx : 0)
+  const defaultIdx = initialDIdx !== null ? initialDIdx : (giorni.findIndex(d => d.toDateString() === oggi.toDateString()) >= 0 ? giorni.findIndex(d => d.toDateString() === oggi.toDateString()) : 0)
+  const [dIdx, setDIdx]     = useState(defaultIdx)
   const [lavori, setLavori] = useState([])
   const [loading, setLoading] = useState(true)
   const [statiDB, setStatiDB] = useState([])
   const [staffDB, setStaffDB] = useState([])
-  const bodyRef = useRef(null)
 
-  const giorno = giorni[dIdx]
-  const isOggi = giorno.toDateString() === oggi.toDateString()
-  const nowTop = getNowTop()
+  // Drag state
+  const [dragging, setDragging]   = useState(null)  // { id, offsetMin }
+  const [dragTop,  setDragTop]    = useState(null)   // px top durante drag
+  const [ghostOra, setGhostOra]   = useState(null)   // "HH:MM" label ghost
+
+  const bodyRef  = useRef(null)
+  const gridRef  = useRef(null)
 
   useEffect(() => {
     apiFetch('/api/stati-lavoro').then(r => r.json()).then(setStatiDB).catch(() => {})
@@ -135,61 +135,205 @@ export default function Giorno({ offsetSettimana = 0, refreshKey = 0, onEventoCl
       .then(data => { setLavori(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [offsetSettimana, refreshKey])
+
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 120
   }, [])
 
+  // Aggiorna dIdx quando cambia settimana: cerca il giorno corrente nella nuova settimana
+  useEffect(() => {
+    const newGiorni = getSettimana(getLunedi(offsetSettimana))
+    const idx = newGiorni.findIndex(d => d.toDateString() === oggi.toDateString())
+    setDIdx(idx >= 0 ? idx : 0)
+  }, [offsetSettimana])
+
+  const giorno    = giorni[dIdx]
+  const isOggi    = giorno.toDateString() === oggi.toDateString()
+  const nowTop    = getNowTop()
   const giornoStr = formatDate(giorno)
+
   const lavoriGiorno = lavori.filter(ev => {
     if (!ev.data_inizio) return false
     return ev.data_inizio.slice(0, 10) === giornoStr
   })
 
-  console.log('lavoriGiorno:', lavoriGiorno.length, giorno.toDateString())
-console.log('tutti i lavori:', lavori.length)
-
   const layout = calcolaLayout(lavoriGiorno)
 
-  return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--sur)' }}>
+  // ── Drag & Drop ──────────────────────────────────────────────────────────────
 
-      {/* Tab giorni */}
-      <div style={{ display:'flex', borderBottom:'1px solid var(--bor)', background:'var(--sur)', flexShrink:0, padding:'0 16px' }}>
-        <div style={{ width:'52px', flexShrink:0 }} />
-        {giorni.map((d, i) => {
-          const isT   = d.toDateString() === oggi.toDateString()
-          const isSel = i === dIdx
-          return (
-            <div key={i} onClick={() => setDIdx(i)} style={{
-              flex:1, padding:'8px 6px', textAlign:'center', cursor:'pointer',
-              borderBottom: isSel ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom:'-1px',
-            }}>
-              <div style={{ fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color: isSel ? 'var(--accent)' : 'var(--tx3)', marginBottom:'3px' }}>
-                {GIORNI_BREVI[i]}
-              </div>
-              <div style={{
-                fontSize: isT ? '15px' : '20px',
-                fontWeight: isT ? 700 : 300,
-                color: isT ? '#fff' : isSel ? 'var(--accent)' : 'var(--tx2)',
-                lineHeight: 1,
-                ...(isT ? { background:'var(--accent)', width:'32px', height:'32px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' } : {})
+  function pxToMinuti(pxFromTop) {
+    // pxFromTop relativo alla colonna eventi (senza la colonna ore)
+    return Math.max(0, pxFromTop)
+  }
+
+  function getGridTop(clientY) {
+    if (!gridRef.current) return 0
+    const rect = gridRef.current.getBoundingClientRect()
+    return clientY - rect.top + (bodyRef.current?.scrollTop || 0)
+  }
+
+  function onDragStart(e, ev, top) {
+    // offsetMin: quanti minuti dall'inizio dell'evento ha cliccato l'utente
+    const rect = e.currentTarget.getBoundingClientRect()
+    const clickY = e.clientY - rect.top
+    const offsetMin = Math.floor(clickY)   // px ≈ min (1px = 1min)
+    setDragging({ id: ev.id, ev, offsetMin, originalTop: top })
+    setDragTop(top)
+    // Calcola etichetta ora ghost
+    const minTot = arrotondaMinuti(top)
+    const h = Math.floor(minTot / 60) + ORA_INIZIO
+    const m = minTot % 60
+    setGhostOra(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)
+    e.stopPropagation()
+  }
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragging) return
+    const rawTop  = getGridTop(e.clientY) - dragging.offsetMin
+    const snapTop = arrotondaMinuti(Math.max(0, rawTop))
+    setDragTop(snapTop)
+    const minTot  = snapTop
+    const h = Math.floor(minTot / 60) + ORA_INIZIO
+    const m = minTot % 60
+    setGhostOra(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)
+  }, [dragging])
+
+  const onMouseUp = useCallback(async (e) => {
+    if (!dragging) return
+    const rawTop  = getGridTop(e.clientY) - dragging.offsetMin
+    const snapMin = arrotondaMinuti(Math.max(0, rawTop))
+    setDragging(null)
+    setDragTop(null)
+    setGhostOra(null)
+
+    // Calcola nuova data_inizio
+    const ev = dragging.ev
+    const nuovaInizio = new Date(giorno)
+    nuovaInizio.setHours(ORA_INIZIO + Math.floor(snapMin / 60), snapMin % 60, 0, 0)
+
+    // Calcola durata originale per mantenere data_fine
+    const origInizio = parseData(ev.data_inizio)
+    const origFine   = ev.data_fine ? parseData(ev.data_fine) : new Date(origInizio.getTime() + 30 * 60000)
+    const durata     = origFine - origInizio  // ms
+
+    const nuovaFine = new Date(nuovaInizio.getTime() + durata)
+
+    function fmt(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    }
+
+    // Ottimisticamente aggiorna UI
+    setLavori(prev => prev.map(l => {
+      if (l.id !== ev.id) return l
+      return { ...l, data_inizio: fmt(nuovaInizio).replace('T',' '), data_fine: fmt(nuovaFine).replace('T',' ') }
+    }))
+
+    try {
+      await apiFetch(`/api/lavori/${ev.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data_inizio: fmt(nuovaInizio), data_fine: fmt(nuovaFine) }),
+      })
+    } catch(err) {
+      console.error('Errore aggiornamento orario:', err)
+      // Rollback
+      setLavori(prev => prev.map(l => l.id === ev.id ? ev : l))
+    }
+  }, [dragging, giorno])
+
+  // Attach global listeners during drag
+  useEffect(() => {
+    if (dragging) {
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [dragging, onMouseMove, onMouseUp])
+
+  // ── Click su slot vuoto ───────────────────────────────────────────────────────
+  function onSlotClick(e) {
+    if (dragging) return
+    if (!onNuovoPrecompilato) return
+    const rect = gridRef.current.getBoundingClientRect()
+    const relY  = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
+    const minTot = arrotondaMinuti(Math.max(0, relY))
+    const h = Math.floor(minTot / 60) + ORA_INIZIO
+    const m = minTot % 60
+    const ora = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+    onNuovoPrecompilato({
+      data: giornoStr,
+      ora,
+      tipo_form: 'evento',
+    })
+  }
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--sur)', userSelect: dragging ? 'none' : 'auto' }}>
+
+      {/* Tab giorni + frecce settimana */}
+      <div style={{ display:'flex', alignItems:'center', borderBottom:'1px solid var(--bor)', background:'var(--sur)', flexShrink:0, padding:'0 8px', gap:'4px' }}>
+        {/* Freccia sinistra */}
+        <button
+          onClick={() => onOffsetChange && onOffsetChange(offsetSettimana - 1)}
+          style={{ width:'32px', height:'32px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', cursor:'pointer', fontSize:'16px', color:'var(--tx2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}
+          title="Settimana precedente"
+        >‹</button>
+
+        {/* Tab giorni */}
+        <div style={{ display:'flex', flex:1 }}>
+          <div style={{ width:'44px', flexShrink:0 }} />
+          {giorni.map((d, i) => {
+            const isT   = d.toDateString() === oggi.toDateString()
+            const isSel = i === dIdx
+            return (
+              <div key={i} onClick={() => setDIdx(i)} style={{
+                flex:1, padding:'8px 4px', textAlign:'center', cursor:'pointer',
+                borderBottom: isSel ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom:'-1px',
               }}>
-                {d.getDate()}
+                <div style={{ fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color: isSel ? 'var(--accent)' : 'var(--tx3)', marginBottom:'3px' }}>
+                  {GIORNI_BREVI[i]}
+                </div>
+                <div style={{
+                  fontSize: isT ? '13px' : '18px',
+                  fontWeight: isT ? 700 : 300,
+                  color: isT ? '#fff' : isSel ? 'var(--accent)' : 'var(--tx2)',
+                  lineHeight: 1,
+                  ...(isT ? { background:'var(--accent)', width:'28px', height:'28px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' } : {})
+                }}>
+                  {d.getDate()}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+
+        {/* Freccia destra */}
+        <button
+          onClick={() => onOffsetChange && onOffsetChange(offsetSettimana + 1)}
+          style={{ width:'32px', height:'32px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', cursor:'pointer', fontSize:'16px', color:'var(--tx2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}
+          title="Settimana successiva"
+        >›</button>
       </div>
 
       {/* Titolo giorno */}
-      <div style={{ padding:'10px 20px 8px', borderBottom:'1px solid var(--borl)', flexShrink:0, display:'flex', alignItems:'center', gap:'10px' }}>
+      <div style={{ padding:'8px 16px', borderBottom:'1px solid var(--borl)', flexShrink:0, display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
         <span style={{ fontSize:'13px', fontWeight:700 }}>
           {GIORNI_FULL[dIdx]} {giorno.getDate()} {MESI[giorno.getMonth()]} {giorno.getFullYear()}
         </span>
         <span style={{ background:'var(--accent-l)', color:'var(--accent)', fontSize:'11px', fontWeight:600, padding:'2px 10px', borderRadius:'99px' }}>
           {lavoriGiorno.length} {lavoriGiorno.length === 1 ? 'lavoro' : 'lavori'}
         </span>
+        {/* Bottone aggiungi */}
+        {onNuovoPrecompilato && (
+          <button
+            onClick={() => onNuovoPrecompilato({ data: giornoStr, tipo_form: 'lavoro' })}
+            style={{ marginLeft:'auto', padding:'5px 12px', border:'none', background:'var(--accent)', color:'#fff', borderRadius:'8px', fontSize:'11px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif' }}
+          >+ Aggiungi lavoro</button>
+        )}
       </div>
 
       {/* Corpo */}
@@ -199,33 +343,59 @@ console.log('tutti i lavori:', lavori.length)
             Caricamento...
           </div>
         )}
-        <div style={{ display:'grid', gridTemplateColumns:'52px 1fr', position:'relative' }}>
 
+        <div style={{ display:'grid', gridTemplateColumns:'44px 1fr', position:'relative' }}>
+
+          {/* Linea "ora corrente" */}
           {isOggi && (
             <div style={{ position:'absolute', left:0, right:0, top:`${nowTop}px`, height:'2px', background:'rgba(239,68,68,.55)', zIndex:15, pointerEvents:'none' }}>
-              <div style={{ position:'absolute', left:'52px', top:'-4px', width:'8px', height:'8px', background:'var(--red)', borderRadius:'50%' }} />
-              <span style={{ position:'absolute', left:'4px', top:'-8px', fontSize:'9px', fontFamily:'JetBrains Mono, monospace', background:'var(--red)', color:'#fff', padding:'1px 4px', borderRadius:'3px' }}>
+              <div style={{ position:'absolute', left:'44px', top:'-4px', width:'8px', height:'8px', background:'var(--red)', borderRadius:'50%' }} />
+              <span style={{ position:'absolute', left:'2px', top:'-8px', fontSize:'9px', fontFamily:'JetBrains Mono, monospace', background:'var(--red)', color:'#fff', padding:'1px 4px', borderRadius:'3px' }}>
                 {String(new Date().getHours()).padStart(2,'0')}:{String(new Date().getMinutes()).padStart(2,'0')}
               </span>
             </div>
           )}
 
+          {/* Colonna ore */}
           <div>
             {ORE.map(ora => (
-              <div key={ora} style={{ height:'60px', borderBottom:'1px solid var(--borl)', display:'flex', alignItems:'flex-start', paddingTop:'2px', justifyContent:'flex-end', paddingRight:'8px' }}>
+              <div key={ora} style={{ height:`${SLOT_H}px`, borderBottom:'1px solid var(--borl)', display:'flex', alignItems:'flex-start', paddingTop:'2px', justifyContent:'flex-end', paddingRight:'6px' }}>
                 <span style={{ fontSize:'9px', fontFamily:'JetBrains Mono, monospace', color:'var(--tx3)', marginTop:'-5px' }}>{ora}</span>
               </div>
             ))}
           </div>
 
-          <div style={{ borderLeft:'1px solid var(--borl)', position:'relative', background: isOggi ? 'rgba(2,132,199,.015)' : 'transparent' }}>
+          {/* Colonna eventi — cliccabile per nuovo slot */}
+          <div
+            ref={gridRef}
+            onClick={onSlotClick}
+            style={{ borderLeft:'1px solid var(--borl)', position:'relative', background: isOggi ? 'rgba(2,132,199,.015)' : 'transparent', cursor: onNuovoPrecompilato ? 'crosshair' : 'default' }}
+          >
             {ORE.map(ora => (
-              <div key={ora} style={{ height:'60px', borderBottom:'1px solid var(--borl)', position:'relative' }}>
+              <div key={ora} style={{ height:`${SLOT_H}px`, borderBottom:'1px solid var(--borl)', position:'relative' }}>
                 <div style={{ position:'absolute', left:0, right:0, top:'50%', height:'1px', background:'var(--borl)', opacity:.4 }} />
               </div>
             ))}
 
+            {/* Ghost drag */}
+            {dragging && dragTop !== null && (
+              <div style={{
+                position:'absolute', top:`${dragTop}px`,
+                left:'4px', right:'4px',
+                height:'48px',
+                background:'var(--accent)', opacity:.25,
+                borderRadius:'7px', zIndex:20, pointerEvents:'none',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+                <span style={{ fontSize:'11px', fontWeight:700, color:'var(--accent)', background:'white', padding:'2px 8px', borderRadius:'4px', opacity:1 }}>
+                  {ghostOra}
+                </span>
+              </div>
+            )}
+
             {layout.map(({ ev, top, h, col, totCols }) => {
+              const isDraggingThis = dragging?.id === ev.id
+              const displayTop = isDraggingThis ? dragTop : top
               const c = getColoreEvento(ev, statiDB, staffDB)
               const inizio = parseData(ev.data_inizio)
               const oraLabel = `${String(inizio.getHours()).padStart(2,'0')}:${String(inizio.getMinutes()).padStart(2,'0')}`
@@ -241,16 +411,37 @@ console.log('tutti i lavori:', lavori.length)
               ].filter(Boolean).join(' — ')
 
               return (
-                <div key={ev.id} onClick={() => onEventoClick(ev)} style={{
-                  position:'absolute', top:`${top}px`, height:`${h}px`,
-                  left:`calc(${leftPct}% + 4px)`, width:`calc(${widthPct}% - 8px)`,
-                  background: c.border, borderLeft:`4px solid ${c.bg}`, color: testoAdattivo(c.border),
-                  borderRadius:'7px', padding:'4px 8px', cursor:'pointer',
-                  overflow:'hidden', zIndex: 10 + col, boxShadow:'0 1px 4px rgba(15,23,42,.07)',
-                  display:'flex', alignItems:'center', gap:'6px',
-                }}>
+                <div
+                  key={ev.id}
+                  onMouseDown={(e) => {
+                    // inizia drag solo col tasto sinistro
+                    if (e.button !== 0) return
+                    onDragStart(e, ev, top)
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!dragging) onEventoClick(ev)
+                  }}
+                  style={{
+                    position:'absolute',
+                    top:`${displayTop}px`,
+                    height:`${h}px`,
+                    left:`calc(${leftPct}% + 4px)`,
+                    width:`calc(${widthPct}% - 8px)`,
+                    background: c.border,
+                    borderLeft:`4px solid ${c.bg}`,
+                    color: testoAdattivo(c.border),
+                    borderRadius:'7px', padding:'4px 8px', cursor:'grab',
+                    overflow:'hidden',
+                    zIndex: isDraggingThis ? 50 : 10 + col,
+                    boxShadow: isDraggingThis ? '0 4px 20px rgba(2,132,199,.35)' : '0 1px 4px rgba(15,23,42,.07)',
+                    display:'flex', alignItems:'center', gap:'6px',
+                    opacity: isDraggingThis ? 0.85 : 1,
+                    transition: isDraggingThis ? 'none' : 'box-shadow .1s',
+                  }}
+                >
                   <span style={{ fontFamily:'JetBrains Mono, monospace', fontSize:'10px', fontWeight:700, opacity:.8, flexShrink:0 }}>
-                    {oraLabel}
+                    {isDraggingThis && ghostOra ? ghostOra : oraLabel}
                   </span>
                   <span style={{ fontSize:'12px', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
                     {rigaInfo}
