@@ -290,6 +290,7 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
     note_interne:lavoroIniziale.note_interne?? '',
     stato_id:    lavoroIniziale.stato_id != null ? String(lavoroIniziale.stato_id) : '',
     terminato:   lavoroIniziale.terminato ?? false,
+    cliente_id:  lavoroIniziale.cliente_id ? String(lavoroIniziale.cliente_id) : '',
   })
   const [saving,    setSaving]    = useState(false)
   const [salvato,   setSalvato]   = useState(false)
@@ -328,13 +329,14 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
   async function salva() {
     setSaving(true)
     try {
+      const clienteSelezionato = clientiDB.find(c => String(c.id) === form.cliente_id)
       const res = await apiFetch(`/api/lavori/${lavoro.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           paziente:     form.paziente,
-          clinica:      lavoro.clinica,
-          cliente_id:   lavoro.cliente_id,
+          clinica:      clienteSelezionato?.nome ?? lavoro.clinica,
+          cliente_id:   form.cliente_id ? parseInt(form.cliente_id, 10) : lavoro.cliente_id,
           tipo:         form.tipo,
           tinta:        form.tinta,
           elementi:     form.elementi,
@@ -382,14 +384,25 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
   }
 
   const statoCorrente = statiDB.find(s => String(s.id) === form.stato_id)
-  const clienteNome = lavoro.cliente_display || lavoro.clinica || ''
+  const clienteSelezionato = clientiDB.find(c => String(c.id) === form.cliente_id)
+  const clienteNome = clienteSelezionato?.nome || lavoro.cliente_display || lavoro.clinica || ''
 
   const [stampando, setStampando] = useState(false)
 
   async function apriPDF() {
     setStampando(true)
     try {
-      const { url } = await generaPDF({ ...lavoro, cliente_display: clienteNome }, impostazioni)
+      // Usa i dati del form (anche non salvati) per il PDF
+      const datiPDF = {
+        ...lavoro,
+        paziente: form.paziente,
+        tipo: form.tipo,
+        tinta: form.tinta,
+        elementi: form.elementi,
+        note: form.note,
+        cliente_display: clienteNome,
+      }
+      const { url } = await generaPDF(datiPDF, impostazioni)
       const a = document.createElement('a')
       a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
@@ -405,7 +418,8 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
     form.elementi     !== (lavoro.elementi     ?? '') ||
     form.note         !== (lavoro.note         ?? '') ||
     form.note_interne !== (lavoro.note_interne ?? '') ||
-    String(form.stato_id) !== String(lavoro.stato_id ?? '') ||
+    String(form.stato_id)   !== String(lavoro.stato_id   ?? '') ||
+    String(form.cliente_id) !== String(lavoro.cliente_id ?? '') ||
     form.terminato    !== (lavoro.terminato    ?? false)
   )
 
@@ -440,7 +454,16 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
 
           {/* PDF — sempre visibile su desktop e mobile */}
           {lavoro.tipo_record !== 'evento' && (
-            <button onClick={apriPDF} disabled={stampando} style={{ padding:'7px 14px', border:'1px solid var(--bor)', background:'var(--sur2)', color:'var(--tx2)', borderRadius:'8px', fontSize:'12px', fontWeight:700, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', flexShrink:0, opacity: stampando ? 0.6 : 1 }}>
+            <button onClick={apriPDF} disabled={stampando} style={{
+              padding:'7px 14px',
+              border:'2px solid var(--accent)',
+              background: isMobile ? 'var(--accent)' : 'var(--sur2)',
+              color: isMobile ? '#fff' : 'var(--accent)',
+              borderRadius:'8px', fontSize:'12px', fontWeight:700,
+              cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
+              flexShrink:0, opacity: stampando ? 0.6 : 1,
+              whiteSpace:'nowrap',
+            }}>
               {stampando ? '...' : '📄 PDF'}
             </button>
           )}
@@ -499,6 +522,20 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
               <span style={{ fontSize:'12px', fontWeight:600, color: form.terminato ? 'var(--grn)' : 'var(--tx2)' }}>
                 {form.terminato ? '✓ Lavoro terminato' : 'Segna come terminato'}
               </span>
+            </div>
+
+            <div style={fd}>
+              <label style={lbl}>Cliente</label>
+              <select
+                style={{ ...inp, cursor:'pointer' }}
+                value={form.cliente_id}
+                onChange={e => set('cliente_id', e.target.value)}
+              >
+                <option value="">— Seleziona cliente —</option>
+                {clientiDB.map(c => (
+                  <option key={c.id} value={String(c.id)}>{c.nome}</option>
+                ))}
+              </select>
             </div>
 
             <div style={fd}>
