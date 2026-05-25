@@ -115,12 +115,12 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
   const lavoriGiorno = lavori.filter(ev => ev.data_inizio?.slice(0,10) === giornoStr)
   const layout       = calcolaLayout(lavoriGiorno)
 
-  // Ghost: usa e.currentTarget (la colonna eventi) per rect — così relY è 0 all'inizio della griglia ore
   function onColMouseMove(e) {
     if (e.target.closest('[data-evento]')) { setGhost(null); return }
     const rect   = e.currentTarget.getBoundingClientRect()
     const scroll = bodyRef.current?.scrollTop || 0
-    // relY = posizione nel DOM della colonna (0 = 06:00, 60 = 07:00, ecc.)
+    // relY = px dall'inizio del DOM della colonna (0 = 06:00)
+    // getBoundingClientRect dà la posizione visibile, quindi serve aggiungere scroll
     const relY   = e.clientY - rect.top + scroll
     const snapPx = Math.floor(relY / 30) * 30
     const mins   = Math.max(0, snapPx)
@@ -134,7 +134,7 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
   function onColClick(e) {
     if (e.target.closest('[data-evento]')) return
     if (!onNuovoPrecompilato || !ghost) return
-    onNuovoPrecompilato({ data: giornoStr, ora: ghost.ora, tipo_form: 'evento' })
+    onNuovoPrecompilato({ data: giornoStr, ora: ghost.ora, tipo_form: 'lavoro' })
   }
 
   return (
