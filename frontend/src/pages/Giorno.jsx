@@ -119,14 +119,16 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
   function onColMouseMove(e) {
     if (e.target.closest('[data-evento]')) { setGhost(null); return }
     const rect   = e.currentTarget.getBoundingClientRect()
-    const relY   = e.clientY - rect.top   // NO scrollTop: getBoundingClientRect è già viewport-relativo
+    const scroll = bodyRef.current?.scrollTop || 0
+    // relY = posizione nel DOM della colonna (0 = 06:00, 60 = 07:00, ecc.)
+    const relY   = e.clientY - rect.top + scroll
     const snapPx = Math.floor(relY / 30) * 30
     const mins   = Math.max(0, snapPx)
     const h      = ORA_INIZIO + Math.floor(mins / 60)
     const m      = mins % 60
     const eh     = ORA_INIZIO + Math.floor((mins + 30) / 60)
     const em     = (mins + 30) % 60
-    setGhost({ top: snapPx + (bodyRef.current?.scrollTop || 0), ora:`${p2(h)}:${p2(m)}`, oraFine:`${p2(eh)}:${p2(em)}` })
+    setGhost({ top: snapPx, ora:`${p2(h)}:${p2(m)}`, oraFine:`${p2(eh)}:${p2(em)}` })
   }
 
   function onColClick(e) {
