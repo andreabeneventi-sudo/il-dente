@@ -426,72 +426,131 @@ export default function PaginaLavoro({ lavoro: lavoroIniziale, onTorna, onSaved,
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--bg)' }}>
 
-      {/* Header */}
-      <div style={{ padding: isMobile ? '10px 16px' : '12px 24px', borderBottom:'1px solid var(--bor)', background:'var(--sur)', display:'flex', flexDirection:'column', gap:'8px', flexShrink:0 }}>
-
-        {/* Riga 1: Torna | Titolo/codice | [Salvato] | PDF | Salva */}
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-
-          <button onClick={onTorna} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px 12px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', color:'var(--tx2)', flexShrink:0 }}>
-            ← Torna
-          </button>
-
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize: isMobile ? '13px' : '15px', fontWeight:700, color:'var(--tx)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {clienteNome}{lavoro.paziente ? ` — ${lavoro.paziente}` : ''}
-            </div>
-            <div style={{ fontSize:'11px', color:'var(--tx3)', fontFamily:'JetBrains Mono, monospace' }}>
-              {lavoro.codice}
-            </div>
-          </div>
-
-          {/* Toast salvato — display:none quando non visibile così non occupa spazio */}
-          {salvato && (
-            <div style={{ background:'#15803d', color:'#fff', borderRadius:'8px', padding:'5px 10px', fontSize:'11px', fontWeight:700, flexShrink:0, whiteSpace:'nowrap' }}>
-              ✅ Salvato
-            </div>
-          )}
-
-          {/* PDF — sempre visibile su desktop e mobile */}
-          {lavoro.tipo_record !== 'evento' && (
-            <button onClick={apriPDF} disabled={stampando} style={{
-              padding:'7px 14px',
-              border:'2px solid var(--accent)',
-              background: isMobile ? 'var(--accent)' : 'var(--sur2)',
-              color: isMobile ? '#fff' : 'var(--accent)',
-              borderRadius:'8px', fontSize:'12px', fontWeight:700,
-              cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
-              flexShrink:0, opacity: stampando ? 0.6 : 1,
-              whiteSpace:'nowrap',
-            }}>
-              {stampando ? '...' : '📄 PDF'}
+      {isMobile ? (
+        <>
+          {/* MOBILE — Riga 1: Torna + Titolo (non sticky, scorre via) */}
+          <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--bor)', background:'var(--sur)', display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
+            <button onClick={onTorna} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px 12px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', color:'var(--tx2)', flexShrink:0 }}>
+              ← Torna
             </button>
-          )}
-
-          {/* Salva */}
-          <button onClick={salva} disabled={saving || !hasChanges} style={{ padding:'7px 16px', border:'none', background:'var(--accent)', color:'#fff', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor: hasChanges ? 'pointer' : 'not-allowed', fontFamily:'Instrument Sans, sans-serif', boxShadow:'0 2px 8px rgba(2,132,199,.3)', opacity: saving || !hasChanges ? 0.4 : 1, flexShrink:0 }}>
-            {saving ? '...' : 'Salva'}
-          </button>
-        </div>
-
-        {/* Riga 2: stati */}
-        {statoCorrente && (
-          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-            {statiDB.map(s => {
-              const isSelected = String(form.stato_id) === String(s.id)
-              return (
-                <div key={s.id} onClick={() => set('stato_id', String(s.id))} style={{
-                  padding:'4px 12px', borderRadius:'20px', fontSize:'11px', fontWeight:700,
-                  cursor:'pointer', border:`2px solid ${isSelected ? s.colore : 'var(--bor)'}`,
-                  background: isSelected ? s.colore+'22' : 'var(--sur2)',
-                  color: isSelected ? s.colore : 'var(--tx3)',
-                  transition:'all .15s',
-                }}>{s.nome}</div>
-              )
-            })}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:'13px', fontWeight:700, color:'var(--tx)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {clienteNome}{lavoro.paziente ? ` — ${lavoro.paziente}` : ''}
+              </div>
+              <div style={{ fontSize:'11px', color:'var(--tx3)', fontFamily:'JetBrains Mono, monospace' }}>
+                {lavoro.codice}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* MOBILE — Barra azioni sticky: stati + PDF + Salva */}
+          <div style={{ position:'sticky', top:0, zIndex:50, padding:'10px 16px', borderBottom:'1px solid var(--bor)', background:'var(--sur)', display:'flex', alignItems:'center', gap:'8px', flexShrink:0, flexWrap:'wrap', boxShadow:'0 2px 8px rgba(15,23,42,.06)' }}>
+            {/* Stati */}
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', flex:1 }}>
+              {statiDB.map(s => {
+                const isSelected = String(form.stato_id) === String(s.id)
+                return (
+                  <div key={s.id} onClick={() => set('stato_id', String(s.id))} style={{
+                    padding:'5px 12px', borderRadius:'20px', fontSize:'11px', fontWeight:700,
+                    cursor:'pointer', border:`2px solid ${isSelected ? s.colore : 'var(--bor)'}`,
+                    background: isSelected ? s.colore+'22' : 'var(--sur2)',
+                    color: isSelected ? s.colore : 'var(--tx3)',
+                    transition:'all .15s', whiteSpace:'nowrap',
+                  }}>{s.nome}</div>
+                )
+              })}
+            </div>
+
+            {/* PDF */}
+            {lavoro.tipo_record !== 'evento' && (
+              <button onClick={apriPDF} disabled={stampando} style={{
+                padding:'8px 14px', border:'2px solid var(--accent)',
+                background:'var(--accent)', color:'#fff',
+                borderRadius:'8px', fontSize:'12px', fontWeight:700,
+                cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
+                flexShrink:0, opacity: stampando ? 0.6 : 1,
+              }}>
+                {stampando ? '...' : '📄 PDF'}
+              </button>
+            )}
+
+            {/* Salva */}
+            <button onClick={salva} disabled={saving || !hasChanges} style={{
+              padding:'8px 18px', border:'none',
+              background:'var(--accent)', color:'#fff',
+              borderRadius:'8px', fontSize:'12px', fontWeight:700,
+              cursor: hasChanges ? 'pointer' : 'not-allowed',
+              fontFamily:'Instrument Sans, sans-serif',
+              boxShadow:'0 2px 8px rgba(2,132,199,.3)',
+              opacity: saving || !hasChanges ? 0.4 : 1, flexShrink:0,
+            }}>
+              {saving ? '...' : salvato ? '✅ Salvato' : 'Salva'}
+            </button>
+          </div>
+        </>
+      ) : (
+        /* DESKTOP — Header unico con tutto su una riga + stati sotto */
+        <div style={{ padding:'12px 24px', borderBottom:'1px solid var(--bor)', background:'var(--sur)', display:'flex', flexDirection:'column', gap:'8px', flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+            <button onClick={onTorna} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px 12px', border:'1px solid var(--bor)', background:'var(--sur2)', borderRadius:'8px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'Instrument Sans, sans-serif', color:'var(--tx2)', flexShrink:0 }}>
+              ← Torna
+            </button>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:'15px', fontWeight:700, color:'var(--tx)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {clienteNome}{lavoro.paziente ? ` — ${lavoro.paziente}` : ''}
+              </div>
+              <div style={{ fontSize:'11px', color:'var(--tx3)', fontFamily:'JetBrains Mono, monospace' }}>
+                {lavoro.codice}
+              </div>
+            </div>
+            {salvato && (
+              <div style={{ background:'#15803d', color:'#fff', borderRadius:'8px', padding:'5px 12px', fontSize:'11px', fontWeight:700, flexShrink:0, whiteSpace:'nowrap' }}>
+                ✅ Salvato
+              </div>
+            )}
+            {lavoro.tipo_record !== 'evento' && (
+              <button onClick={apriPDF} disabled={stampando} style={{
+                padding:'7px 14px', border:'1px solid var(--bor)',
+                background:'var(--sur2)', color:'var(--tx2)',
+                borderRadius:'8px', fontSize:'12px', fontWeight:600,
+                cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
+                flexShrink:0, opacity: stampando ? 0.6 : 1,
+              }}>
+                {stampando ? '...' : '📄 PDF'}
+              </button>
+            )}
+            <button onClick={salva} disabled={saving || !hasChanges} style={{
+              padding:'7px 20px', border:'none',
+              background:'var(--accent)', color:'#fff',
+              borderRadius:'8px', fontSize:'12px', fontWeight:600,
+              cursor: hasChanges ? 'pointer' : 'not-allowed',
+              fontFamily:'Instrument Sans, sans-serif',
+              boxShadow:'0 2px 8px rgba(2,132,199,.3)',
+              opacity: saving || !hasChanges ? 0.4 : 1, flexShrink:0,
+            }}>
+              {saving ? 'Salvataggio...' : 'Salva'}
+            </button>
+          </div>
+
+          {/* Stati — solo se presenti */}
+          {statiDB.length > 0 && (
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+              {statiDB.map(s => {
+                const isSelected = String(form.stato_id) === String(s.id)
+                return (
+                  <div key={s.id} onClick={() => set('stato_id', String(s.id))} style={{
+                    padding:'4px 14px', borderRadius:'20px', fontSize:'11px', fontWeight:700,
+                    cursor:'pointer', border:`2px solid ${isSelected ? s.colore : 'var(--bor)'}`,
+                    background: isSelected ? s.colore+'22' : 'var(--sur2)',
+                    color: isSelected ? s.colore : 'var(--tx3)',
+                    transition:'all .15s',
+                  }}>{s.nome}</div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Body */}
       <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '16px 16px 96px' : '24px', display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:'20px', alignContent:'start' }}>
