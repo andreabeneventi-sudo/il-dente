@@ -880,20 +880,14 @@ const salvaRef = useRef(null)
             </div>
           )}
 
-          {/* Su mobile: tasto PDF fisso sopra il FAB, visibile subito dopo il salvataggio */}
+          {/* Su mobile: tasto PDF inline nel footer dopo il salvataggio */}
           {mostraPDF && isMobile && (
             <button onClick={stampaPDF} disabled={stampando} style={{
-              position:'fixed',
-              bottom:'calc(56px + 16px + 52px + 12px + env(safe-area-inset-bottom))',
-              right:'20px', zIndex:298,
-              padding:'12px 20px',
-              border:'none', background:'var(--sur)', color:'var(--accent)',
-              borderRadius:'12px', fontSize:'13px', fontWeight:700,
+              padding:'8px 16px',
+              border:'2px solid var(--accent)', background:'var(--sur)', color:'var(--accent)',
+              borderRadius:'10px', fontSize:'13px', fontWeight:700,
               cursor:'pointer', fontFamily:'Instrument Sans, sans-serif',
-              boxShadow:'0 2px 12px rgba(2,132,199,.25)',
-              border:'2px solid var(--accent)',
               opacity: stampando ? .6 : 1,
-              display:'flex', alignItems:'center', gap:'8px',
             }}>
               {stampando ? '...' : '📄 Apri PDF'}
             </button>

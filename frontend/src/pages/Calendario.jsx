@@ -1,5 +1,5 @@
 import { apiFetch } from '../utils/apiFetch'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const ORE = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00']
 const GIORNI = ['LUN','MAR','MER','GIO','VEN','SAB']
@@ -151,12 +151,6 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
   const [tooltip, setTooltip] = useState(null)
   const [ghost, setGhost]     = useState(null)
 
-  // Drag & drop
-  const [dragging,  setDragging]  = useState(null)  // { id, ev, colIdx, offsetMin }
-  const [dragState, setDragState] = useState(null)  // { colIdx, top }
-  const [dragLabel, setDragLabel] = useState(null)  // "HH:MM"
-  const didDragRef = useRef(false)
-
   const bodyRef = useRef(null)
 
   const lunedi = getLunedi(offsetSettimana)
@@ -207,88 +201,9 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
 
   function handleColClick(e, colIdx) {
     if (e.target.closest('[data-evento]')) return
-    if (didDragRef.current) return
     if (!ghost || ghost.colIdx !== colIdx) return
     onNuovoClick?.({ data: ghost.data, ora: ghost.ora, tipo_form: 'lavoro' })
   }
-
-  // ── Drag handlers ──────────────────────────────────────────────────────────
-  function onDragStart(e, ev, colIdx, top) {
-    if (e.button !== 0) return
-    e.stopPropagation()
-    const rect    = e.currentTarget.getBoundingClientRect()
-    const clickY  = e.clientY - rect.top
-    didDragRef.current = false
-    setDragging({ id: ev.id, ev, colIdx, offsetMin: Math.floor(clickY) })
-    setDragState({ colIdx, top })
-    setDragLabel(null)
-    setGhost(null)
-    setTooltip(null)
-  }
-
-  const onDragMouseMove = useCallback((e) => {
-    if (!dragging) return
-    didDragRef.current = true
-    // Trova la colonna sotto il mouse
-    const cols = document.querySelectorAll('[data-col]')
-    let targetColIdx = dragging.colIdx
-    let relY = 0
-    for (const col of cols) {
-      const rect = col.getBoundingClientRect()
-      if (e.clientX >= rect.left && e.clientX <= rect.right) {
-        targetColIdx = parseInt(col.dataset.col)
-        relY = e.clientY - rect.top + (bodyRef.current?.scrollTop || 0)
-        break
-      }
-    }
-    const snap = Math.floor(relY / 30) * 30
-    const snapMin = Math.max(0, snap)
-    const h = 6 + Math.floor(snapMin / 60)
-    const m = snapMin % 60
-    const pad = n => String(n).padStart(2,'0')
-    setDragState({ colIdx: targetColIdx, top: snapMin })
-    setDragLabel(`${pad(h)}:${pad(m)}`)
-  }, [dragging])
-
-  const onDragMouseUp = useCallback(async (e) => {
-    if (!dragging) return
-    const wasDrag = didDragRef.current
-    const ds = dragState
-    const ev = dragging.ev
-    setDragging(null); setDragState(null); setDragLabel(null)
-    didDragRef.current = false
-
-    if (!wasDrag || !ds) return
-
-    const giornoDest = giorni[ds.colIdx]
-    const snapMin    = Math.max(0, ds.top)
-    const nuovaInizio = new Date(giornoDest)
-    nuovaInizio.setHours(6 + Math.floor(snapMin/60), snapMin%60, 0, 0)
-    const origInizio  = new Date(ev.data_inizio.replace(' ','T'))
-    const origFine    = ev.data_fine ? new Date(ev.data_fine.replace(' ','T')) : new Date(origInizio.getTime()+30*60000)
-    const nuovaFine   = new Date(nuovaInizio.getTime() + (origFine - origInizio))
-
-    function fmt(d) {
-      const pad = n => String(n).padStart(2,'0')
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-    }
-    setLavori(prev => prev.map(l => l.id !== ev.id ? l : {
-      ...l, data_inizio: fmt(nuovaInizio).replace('T',' '), data_fine: fmt(nuovaFine).replace('T',' ')
-    }))
-    try {
-      await apiFetch(`/api/lavori/${ev.id}`, {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ data_inizio: fmt(nuovaInizio), data_fine: fmt(nuovaFine) }),
-      })
-    } catch { setLavori(prev => prev.map(l => l.id === ev.id ? ev : l)) }
-  }, [dragging, dragState, giorni])
-
-  useEffect(() => {
-    if (!dragging) return
-    window.addEventListener('mousemove', onDragMouseMove)
-    window.addEventListener('mouseup',   onDragMouseUp)
-    return () => { window.removeEventListener('mousemove', onDragMouseMove); window.removeEventListener('mouseup', onDragMouseUp) }
-  }, [dragging, onDragMouseMove, onDragMouseUp])
 
   function getColoreEvento(ev) {
     // Eventi personali — colore dell'utente assegnato
@@ -474,14 +389,13 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
               <div
                 key={colIdx}
                 data-col={colIdx}
-                onMouseMove={e => { if (!dragging) handleColMouseMove(e, colIdx) }}
-                onMouseLeave={() => { if (!dragging) setGhost(null) }}
+                onMouseMove={e => handleColMouseMove(e, colIdx)}
+                onMouseLeave={() => setGhost(null)}
                 onClick={e => handleColClick(e, colIdx)}
                 style={{
                   borderLeft:'1px solid var(--borl)', position:'relative',
                   background: isOggi ? 'rgba(2,132,199,.02)' : isWeekend ? 'rgba(148,163,184,.025)' : 'transparent',
-                  cursor: dragging ? 'grabbing' : 'pointer',
-                  userSelect: dragging ? 'none' : 'auto',
+                  cursor: 'pointer',
                 }}>
                 {ORE.map(ora => (
                   <div key={ora} style={{ height:'60px', borderBottom:'1px solid var(--borl)', position:'relative' }}>
@@ -490,7 +404,7 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
                 ))}
 
                 {/* Ghost hover — nuovo slot */}
-                {ghost?.colIdx === colIdx && !dragging && (
+                {ghost?.colIdx === colIdx && (
                   <div style={{
                     position:'absolute', top: `${ghost.top}px`, left:'3px', right:'3px', height:'30px',
                     background:'rgba(217,70,239,.12)', border:'1.5px dashed rgba(217,70,239,.45)',
@@ -501,20 +415,7 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
                   </div>
                 )}
 
-                {/* Ghost drag — spostamento evento */}
-                {dragging && dragState?.colIdx === colIdx && (
-                  <div style={{
-                    position:'absolute', top:`${dragState.top}px`, left:'2px', right:'2px', height:'30px',
-                    background:'var(--accent)', opacity:.2, borderRadius:'5px', zIndex:20, pointerEvents:'none',
-                    display:'flex', alignItems:'center', padding:'0 6px', fontSize:'10px', fontWeight:700, color:'var(--accent)',
-                  }}>
-                    <span style={{ background:'white', padding:'1px 6px', borderRadius:'3px', opacity:1 }}>{dragLabel}</span>
-                  </div>
-                )}
-
                 {calcolaLayoutColonna(eventiCol, giorni).map(({ ev, top, h, col, totCols }) => {
-                  const isDraggingThis = dragging?.id === ev.id
-                  const displayTop = (isDraggingThis && dragState?.colIdx === colIdx) ? dragState.top : top
                   const c = getColoreEvento(ev)
                   const widthPct = 100 / totCols
                   const leftPct  = col * widthPct
@@ -523,27 +424,22 @@ export default function Calendario({ offsetSettimana = 0, refreshKey = 0, onEven
                     <div
                       key={ev.id}
                       data-evento="true"
-                      onMouseDown={e => onDragStart(e, ev, colIdx, top)}
-                      onClick={e => { e.stopPropagation(); if (!didDragRef.current) onEventoClick(ev) }}
-                      onMouseEnter={e => { if (!dragging) setTooltip({ ev, x: e.clientX, y: e.clientY }) }}
-                      onMouseMove={e  => { if (!dragging) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null) }}
+                      onClick={e => { e.stopPropagation(); onEventoClick(ev) }}
+                      onMouseEnter={e => setTooltip({ ev, x: e.clientX, y: e.clientY })}
+                      onMouseMove={e  => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
                       onMouseLeave={() => setTooltip(null)}
                       style={{
-                        position:'absolute', top:`${displayTop}px`, height:`${h}px`,
+                        position:'absolute', top:`${top}px`, height:`${h}px`,
                         left:`calc(${leftPct}% + 2px)`,
                         width:`calc(${widthPct}% - 4px)`,
                         background: c.border, borderLeft:`3px solid ${c.bg}`, color: testoAdattivo(c.border),
                         borderRadius:'5px', padding:'2px 5px', fontSize:'11px',
-                        cursor: isDraggingThis ? 'grabbing' : 'grab',
-                        overflow:'hidden', zIndex: isDraggingThis ? 50 : 10+col,
-                        opacity: isDraggingThis ? 0.75 : 1,
-                        boxShadow: isDraggingThis ? '0 4px 16px rgba(2,132,199,.3)' : 'none',
+                        cursor:'pointer', overflow:'hidden', zIndex: 10+col,
                         display:'flex', flexDirection:'column', justifyContent:'center', gap:'1px',
-                        transition: isDraggingThis ? 'none' : 'opacity .1s',
                       }}
                     >
                       <div style={{ fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.2 }}>
-                        {isDraggingThis && dragLabel ? `${dragLabel} · ` : ''}{clienteLabel ? `${clienteLabel} — ` : ''}{ev.paziente}
+                        {clienteLabel ? `${clienteLabel} — ` : ''}{ev.paziente}
                       </div>
                       {ev.tipo && h > 28 && (
                         <div style={{ fontSize:'10px', opacity:.75, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.2 }}>
