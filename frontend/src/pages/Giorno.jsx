@@ -116,29 +116,36 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
   const lavoriGiorno = lavori.filter(ev => ev.data_inizio?.slice(0,10) === giornoStr)
   const layout       = calcolaLayout(lavoriGiorno)
 
+  function getRelY(e) {
+    // Funziona sia per mouse che per touch
+    const col  = colRef.current
+    const body = bodyRef.current
+    if (!col || !body) return 0
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    return clientY - col.getBoundingClientRect().top + body.scrollTop
+  }
+
   function onColMouseMove(e) {
     if (e.target.closest('[data-evento]')) { setGhost(null); return }
-    // e.nativeEvent.offsetY = px dal top dell'elemento target (la colonna)
-    // ma se il target è un figlio (riga ora) offsetY è relativo a quel figlio
-    // Usiamo la posizione del colRef nel DOM: offsetTop dal bodyRef
-    const col    = colRef.current
-    const body   = bodyRef.current
-    if (!col || !body) return
-    // colTop = distanza tra il top della colonna e il top del bodyRef (scrollabile)
-    const colTop = col.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop
-    const relY   = e.clientY - body.getBoundingClientRect().top + body.scrollTop - colTop
+    const relY   = getRelY(e)
     const snapPx = Math.max(0, Math.floor(relY / 30) * 30)
-    const h      = ORA_INIZIO + Math.floor(snapPx / 60)
-    const m      = snapPx % 60
-    const eh     = ORA_INIZIO + Math.floor((snapPx + 30) / 60)
-    const em     = (snapPx + 30) % 60
+    const h  = ORA_INIZIO + Math.floor(snapPx / 60)
+    const m  = snapPx % 60
+    const eh = ORA_INIZIO + Math.floor((snapPx + 30) / 60)
+    const em = (snapPx + 30) % 60
     setGhost({ top: snapPx, ora:`${p2(h)}:${p2(m)}`, oraFine:`${p2(eh)}:${p2(em)}` })
   }
 
   function onColClick(e) {
     if (e.target.closest('[data-evento]')) return
-    if (!onNuovoPrecompilato || !ghost) return
-    onNuovoPrecompilato({ data: giornoStr, ora: ghost.ora, tipo_form: 'lavoro' })
+    if (!onNuovoPrecompilato) return
+    // Calcola l'ora direttamente dal click — non dipende dal ghost (funziona su mobile)
+    const relY   = getRelY(e)
+    const snapPx = Math.max(0, Math.floor(relY / 30) * 30)
+    const h  = ORA_INIZIO + Math.floor(snapPx / 60)
+    const m  = snapPx % 60
+    const ora = `${p2(h)}:${p2(m)}`
+    onNuovoPrecompilato({ data: giornoStr, ora, tipo_form: 'lavoro' })
   }
 
   return (
