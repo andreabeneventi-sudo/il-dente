@@ -86,6 +86,7 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
   const [ghost,   setGhost]   = useState(null)
 
   const bodyRef = useRef(null)
+  const colRef  = useRef(null)  // ref sulla colonna eventi per posizione assoluta
 
   useEffect(() => {
     apiFetch('/api/stati-lavoro').then(r=>r.json()).then(setStatiDB).catch(()=>{})
@@ -117,17 +118,20 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
 
   function onColMouseMove(e) {
     if (e.target.closest('[data-evento]')) { setGhost(null); return }
-    const rect   = e.currentTarget.getBoundingClientRect()
-    const scroll = bodyRef.current?.scrollTop || 0
-    // relY = px dall'inizio del DOM della colonna (0 = 06:00)
-    // getBoundingClientRect dà la posizione visibile, quindi serve aggiungere scroll
-    const relY   = e.clientY - rect.top + scroll
-    const snapPx = Math.floor(relY / 30) * 30
-    const mins   = Math.max(0, snapPx)
-    const h      = ORA_INIZIO + Math.floor(mins / 60)
-    const m      = mins % 60
-    const eh     = ORA_INIZIO + Math.floor((mins + 30) / 60)
-    const em     = (mins + 30) % 60
+    // e.nativeEvent.offsetY = px dal top dell'elemento target (la colonna)
+    // ma se il target è un figlio (riga ora) offsetY è relativo a quel figlio
+    // Usiamo la posizione del colRef nel DOM: offsetTop dal bodyRef
+    const col    = colRef.current
+    const body   = bodyRef.current
+    if (!col || !body) return
+    // colTop = distanza tra il top della colonna e il top del bodyRef (scrollabile)
+    const colTop = col.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop
+    const relY   = e.clientY - body.getBoundingClientRect().top + body.scrollTop - colTop
+    const snapPx = Math.max(0, Math.floor(relY / 30) * 30)
+    const h      = ORA_INIZIO + Math.floor(snapPx / 60)
+    const m      = snapPx % 60
+    const eh     = ORA_INIZIO + Math.floor((snapPx + 30) / 60)
+    const em     = (snapPx + 30) % 60
     setGhost({ top: snapPx, ora:`${p2(h)}:${p2(m)}`, oraFine:`${p2(eh)}:${p2(em)}` })
   }
 
@@ -205,6 +209,7 @@ export default function Giorno({ offsetSettimana=0, onOffsetChange, refreshKey=0
 
           {/* Colonna eventi */}
           <div
+            ref={colRef}
             onMouseMove={onColMouseMove}
             onMouseLeave={() => setGhost(null)}
             onClick={onColClick}
